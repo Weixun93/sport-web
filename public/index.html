@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workout Log Sport Tracker</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/swipe.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-content">
+        <h1>汗水日記</h1>
+        <div class="app-header-avatar">
+          <img src="" alt="User avatar" id="header-avatar" class="avatar-img" />
+        </div>
+      </div>
+      <div class="app-sidebar" id="app-sidebar">
+        <button type="button" id="sidebar-back-btn" class="sidebar-back-btn">← 返回</button>
+        <div class="sidebar-avatar">
+          <img src="" alt="User avatar" id="sidebar-avatar" />
+        </div>
+        <div class="sidebar-user-info">
+          <p class="sidebar-username" id="sidebar-username">用戶名稱</p>
+          <p class="sidebar-display-name" id="sidebar-display-name">使用者名稱</p>
+        </div>
+        <div class="sidebar-bottom">
+          <button type="button" id="logout-btn" class="logout-btn">登出</button>
+        </div>
+      </div>
+    </header>
+    
+    <div class="login-page-wrapper guest-view">
+      <div class="login-page-logo">
+        <img src="/images/logo.svg" alt="汗水日誌 Logo" class="logo-img" />
+      </div>
+      
+      <section class="card login-card" id="auth-card">
+        <form id="login-form" class="auth-form" novalidate>
+          <div class="form-field">
+            <label for="login-username">用戶名</label>
+            <input
+              id="login-username"
+              name="username"
+              type="text"
+              placeholder="athlete"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="form-field">
+            <label for="login-password">密碼</label>
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              placeholder="123456"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button type="submit">登入</button>
+          <p id="login-message" class="form-message" role="status" aria-live="polite"></p>
+          <p class="auth-switch auth-switch-bottom">
+            <button type="button" class="auth-switch-btn" data-mode="register">還沒有帳號？</button>
+          </p>
+        </form>
+
+        <form id="register-form" class="auth-form" novalidate hidden>
+          <div class="form-field">
+            <label for="register-username">用戶名</label>
+            <input
+              id="register-username"
+              name="username"
+              type="text"
+              placeholder="myname"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="form-field">
+            <label for="register-password">密碼（至少6個字符）</label>
+            <input
+              id="register-password"
+              name="password"
+              type="password"
+              placeholder="******"
+              autocomplete="new-password"
+              minlength="6"
+              required
+            />
+          </div>
+          <div class="form-field">
+            <label for="register-display">顯示名稱</label>
+            <input
+              id="register-display"
+              name="displayName"
+              type="text"
+              placeholder="輸入顯示名稱"
+              autocomplete="nickname"
+            />
+          </div>
+          <button type="submit">註冊並登入</button>
+          <p id="register-message" class="form-message" role="status" aria-live="polite"></p>
+          <p class="auth-switch auth-switch-bottom">
+            <button type="button" class="auth-switch-btn" data-mode="login">已經有帳號？</button>
+          </p>
+        </form>
+      </section>
+    </div>
+
+      <div class="secondary-header" id="secondary-header" hidden>
+      <div class="secondary-header-content">
+        <div class="page-tabs">
+          <button type="button" class="page-tab active" data-page="weather">天氣</button>
+          <button type="button" class="page-tab" data-page="checkin">打卡</button>
+          <button type="button" class="page-tab" data-page="community">動態</button>
+          <button type="button" class="page-tab" data-page="records">紀錄</button>
+        </div>
+      </div>
+    </div>    <main class="page-main auth-view" id="app-main" hidden>
+
+      <div id="weather-page" class="page-content active">
+        <!-- 天氣頁面內容 -->
+        <section class="card weather-card" id="weather-card">
+          <h2>今日天氣</h2>
+          <div id="weather-content" class="weather-content">
+            <p class="weather-location">位置: --</p>
+            <p class="weather-temp">溫度: -- &deg;C</p>
+            <p class="weather-condition">天氣狀況: --</p>
+            <p class="weather-extra">濕度: -- | 風速: -- km/h</p>
+            <p class="weather-updated">更新時間: --</p>
+          </div>
+        </section>
+      </div>
+
+      <div id="checkin-page" class="page-content">
+        <!-- 打卡頁面內容 -->
+        <section class="card calendar-card" id="calendar-card">
+          <div class="calendar-header">
+            <h2>訓練日曆</h2>
+          <div class="calendar-controls">
+            <button type="button" id="calendar-prev" class="secondary small" aria-label="Previous month">
+              上月
+            </button>
+            <span id="calendar-label" class="calendar-label">--</span>
+            <button type="button" id="calendar-next" class="secondary small" aria-label="Next month">
+              下月
+            </button>
+          </div>
+        </div>
+        <div class="calendar-grid">
+          <div class="calendar-weekdays">
+            <span>日</span>
+            <span>一</span>
+            <span>二</span>
+            <span>三</span>
+            <span>四</span>
+            <span>五</span>
+            <span>六</span>
+          </div>
+          <div id="calendar-days" class="calendar-days" aria-live="polite"></div>
+          <div id="calendar-summary" class="calendar-summary" role="status" aria-live="polite">
+            選擇日曆中的一天以查看其活動。
+          </div>
+        </div>
+      </section>
+
+      <section class="card full-width" id="activity-form-card">
+        <h2>紀錄訓練課程</h2>
+        <form id="activity-form" novalidate>
+          <div class="form-field">
+            <label for="date">日期</label>
+            <input id="date" name="date" type="date" required />
+          </div>
+          <p id="activity-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+      </div>
+      <!-- 結束打卡頁面 -->
+
+      <div id="community-page" class="page-content">
+        <!-- 社群頁面 - 社群動態 -->
+        <section class="card full-width" id="public-activity-card">
+          <h2>社群動態</h2>
+          <ul id="public-activity-list" class="activity-list"></ul>
+        </section>
+      </div>
+      <!-- 結束社群頁面 -->
+
+      <div id="records-page" class="page-content">
+        <!-- 紀錄頁面內容 -->
+        <section class="card full-width" id="activity-list-card">
+          <h2>您的活動歷史</h2>
+          <ul id="activity-list" class="activity-list"></ul>
+        </section>
+      </div>
+      <!-- 結束紀錄頁面 -->
+
+      <!-- 浮動操作按鈕 - 新增紀錄 -->
+      <button type="button" id="fab-add-record" class="fab-button" aria-label="新增紀錄">
+        <span class="fab-icon">+</span>
+      </button>
+
+      <!-- 浮動卡片 - 新增紀錄表單 -->
+      <div id="floating-form-modal" class="floating-form-modal" hidden>
+        <div class="floating-form-content">
+          <div class="floating-form-header">
+            <h2>紀錄訓練課程</h2>
+            <button type="button" id="floating-form-close" class="floating-form-close" aria-label="關閉">
+              ✕
+            </button>
+          </div>
+          <div class="floating-form-body">
+            <form id="activity-form-floating" novalidate>
+              <div class="form-field">
+                <label>日期</label>
+                <div class="date-slider-container">
+                  <div class="date-slider-item">
+                    <label class="date-slider-label">年</label>
+                    <input type="range" class="date-slider" id="year-slider" min="2020" max="2030" value="2025" />
+                    <span class="date-slider-value" id="year-display">2025</span>
+                  </div>
+                  <div class="date-slider-item">
+                    <label class="date-slider-label">月</label>
+                    <input type="range" class="date-slider" id="month-slider" min="1" max="12" value="11" />
+                    <span class="date-slider-value" id="month-display">11</span>
+                  </div>
+                  <div class="date-slider-item">
+                    <label class="date-slider-label">日</label>
+                    <input type="range" class="date-slider" id="day-slider" min="1" max="31" value="3" />
+                    <span class="date-slider-value" id="day-display">03</span>
+                  </div>
+                </div>
+                <div class="date-display-result">
+                  <span id="date-result-display">2025-11-03</span>
+                </div>
+                <input id="date-floating" name="date" type="hidden" value="2025-11-03" required />
+              </div>
+
+              <!-- 運動項目 - Bottom Sheet 選擇器 -->
+              <div class="form-field">
+                <label>運動 / 活動</label>
+                <button type="button" id="sport-selector-btn" class="sport-selector-btn">
+                  <span class="sport-selector-emoji" id="sport-selected-emoji">🏃</span>
+                  <span class="sport-selector-text" id="sport-selected-display">選擇運動</span>
+                  <span class="sport-selector-arrow">›</span>
+                </button>
+                <input id="sport-floating" name="sport" type="hidden" required />
+              </div>
+
+              <div class="form-field">
+                <label for="duration-floating">時間（分鐘）</label>
+                <input id="duration-floating" name="durationMinutes" type="number" min="1" required />
+              </div>
+
+              <!-- 運動強度 - 按鈕群組 -->
+              <div class="form-field">
+                <label>運動強度</label>
+                <div class="button-group button-group-small" id="intensity-buttons">
+                  <button type="button" class="button-group-item" data-value="easy">
+                    輕鬆
+                  </button>
+                  <button type="button" class="button-group-item active" data-value="moderate">
+                    適中
+                  </button>
+                  <button type="button" class="button-group-item" data-value="hard">
+                    高強度
+                  </button>
+                </div>
+                <input id="intensity-floating" name="intensity" type="hidden" value="moderate" />
+              </div>
+
+              <!-- 分享選項 - 切換開關 -->
+              <div class="form-field form-field-toggle" style="position: relative;">
+                <label for="is-public-floating" class="toggle-label" id="share-toggle-label">
+                  <input id="is-public-floating" name="isPublic" type="checkbox" class="toggle-input" disabled />
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">分享到社群（需要上傳照片）</span>
+                </label>
+                <div class="tooltip" id="share-tooltip" style="display: none; position: absolute; background: #333; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.9em; z-index: 1000; margin-top: 8px; left: 50%; transform: translateX(-50%);">
+                  請先上傳照片才能分享到社群
+                </div>
+              </div>
+
+              <!-- 照片上傳 - 圖標按鈕 -->
+              <div class="form-field">
+                <label class="photo-upload-label">
+                  <input id="photo-floating" name="photo" type="file" accept="image/*" hidden />
+                  <span class="photo-upload-button">📷 上傳照片</span>
+                </label>
+                <p id="photo-floating-name" class="photo-name" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;"></p>
+              </div>
+
+              <div class="form-field">
+                <label for="notes-floating">備註</label>
+                <textarea id="notes-floating" name="notes" rows="2" placeholder="輸入備註（選填）"></textarea>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" id="activity-submit-floating" class="primary">保存</button>
+                <button type="button" id="floating-form-cancel" class="secondary">取消</button>
+              </div>
+              <p id="activity-message-floating" class="form-message" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Sheet - 運動項目選擇 -->
+      <div id="sport-bottom-sheet" class="sport-bottom-sheet" hidden>
+        <div class="sport-bottom-sheet-overlay"></div>
+        <div class="sport-bottom-sheet-content">
+          <div class="sport-bottom-sheet-header">
+            <h3>選擇運動項目</h3>
+            <button type="button" id="sport-bottom-sheet-close" class="sport-bottom-sheet-close" aria-label="關閉">✕</button>
+          </div>
+          <div class="sport-bottom-sheet-custom">
+            <h4>新增自訂運動</h4>
+            <div class="sport-custom-form">
+              <input type="text" id="sport-custom-name-input" placeholder="運動名稱" class="sport-custom-input" />
+              <button type="button" id="sport-custom-add-btn" class="sport-custom-add-btn">新增</button>
+            </div>
+          </div>
+          <div class="sport-bottom-sheet-search">
+            <input type="text" id="sport-search-input" class="sport-search-input" placeholder="搜尋運動..." />
+          </div>
+          <div class="sport-bottom-sheet-grid" id="sport-grid">
+            <!-- Grid items will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="page-footer">
+    </footer>
+
+    <script src="/js/app.js" type="module"></script>
+    <script src="/js/swipe-navigator.js" type="module"></script>
+  </body>
+</html>

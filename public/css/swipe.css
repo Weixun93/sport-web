@@ -1,0 +1,35 @@
+/* 滑動容器基本樣式 */
+.swipe-view {
+  position: relative;
+  width: 100%;
+  transition: transform 0.3s ease-out;
+  will-change: transform;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 防止滑動時出現橡皮筋效果 */
+.swipe-view.dragging {
+  transition: none;
+}
+
+/* 視圖切換動畫 */
+.swipe-view.animate {
+  transition: transform 0.3s ease-out;
+}
+
+/* 確保頁面容器不會出現水平滾動 */
+body {
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* 修正觸控事件在某些瀏覽器的問題 */
+.swipe-view {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
