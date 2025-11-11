@@ -297,7 +297,7 @@ app.get('/api/activities', requireAuth, async (req, res, next) => {
   }
 });
 
-app.get('/api/activities/public', requireAuth, async (_req, res, next) => {
+app.get('/api/activities/public', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT a.*, u.display_name as owner_name 
@@ -313,7 +313,9 @@ app.get('/api/activities/public', requireAuth, async (_req, res, next) => {
       durationMinutes: activity.duration_minutes,
       photoUrl: activity.photo_url,
       isPublic: true,
-      ownerName: activity.owner_name
+      ownerId: activity.owner_id,
+      ownerName: activity.owner_name,
+      isOwner: activity.owner_id === req.userId
     }));
 
     res.json({ data: feed });

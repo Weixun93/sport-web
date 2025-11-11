@@ -634,6 +634,7 @@ function renderPublicActivities(activities) {
     const item = document.createElement('li');
     const isPublic = Boolean(activity.isPublic);
     const ownerName = activity.ownerName || 'Anonymous';
+    const isOwner = activity.isOwner; // 檢查是否為所有者
     item.innerHTML = `
       ${
         activity.photoUrl
@@ -651,6 +652,12 @@ function renderPublicActivities(activities) {
       <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
       <p class="activity-owner">分享者：${ownerName}</p>
       ${activity.notes ? `<p class="activity-notes">${activity.notes}</p>` : ''}
+      ${isOwner ? `
+        <div class="activity-actions">
+          <button type="button" class="secondary small" data-action="edit" data-id="${activity.id}">編輯</button>
+          <button type="button" class="danger small" data-action="delete" data-id="${activity.id}">刪除</button>
+        </div>
+      ` : ''}
     `;
     publicList.appendChild(item);
   }
@@ -723,7 +730,11 @@ async function handleActivityListClick(event) {
   const { action, id } = actionButton.dataset;
   if (!action || !id) return;
 
-  const activity = state.activities.find((item) => item.id === id);
+  // 先從私人列表查找，再從社群牆查找
+  let activity = state.activities.find((item) => item.id === id);
+  if (!activity) {
+    activity = state.publicFeed.find((item) => item.id === id);
+  }
   if (!activity) return;
 
   if (action === 'edit') {
@@ -1202,6 +1213,10 @@ if (activityList) {
   activityList.addEventListener('click', handleActivityListClick);
 }
 
+if (publicList) {
+  publicList.addEventListener('click', handleActivityListClick);
+}
+
 if (cancelEditButton) {
   cancelEditButton.addEventListener('click', () => {
     resetActivityForm();
@@ -1257,46 +1272,79 @@ registerForm.addEventListener('submit', async (event) => {
   }
 });
 
-activityForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const formData = new FormData(activityForm);
+// 共用提交處理函數
+async function handleActivitySubmit(form, messageElement) {
+  const formData = new FormData(form);
   const durationValue = Number(formData.get('durationMinutes'));
   const isEditing = Boolean(state.editingActivityId);
 
   if (Number.isNaN(durationValue) || durationValue <= 0) {
-    setMessage(activityMessage, 'Enter a valid duration (minutes).', 'error');
+    setMessage(messageElement, 'Enter a valid duration (minutes).', 'error');
     return;
   }
 
   const sportValue = (formData.get('sport') || '').toString().trim();
   const notesValue = (formData.get('notes') || '').toString().trim();
   if (!sportValue) {
-    setMessage(activityMessage, 'Enter a sport/activity.', 'error');
+    setMessage(messageElement, 'Enter a sport/activity.', 'error');
     return;
   }
 
   formData.set('durationMinutes', String(durationValue));
   formData.set('sport', sportValue);
   formData.set('notes', notesValue);
-  formData.set('isPublic', activityShareCheckbox?.checked ? 'true' : 'false');
+  
+  // 判斷要使用哪個複選框
+  let isPublicValue = 'false';
+  if (form.id === 'activity-form') {
+    // 主表單使用 activityShareCheckbox
+    isPublicValue = activityShareCheckbox?.checked ? 'true' : 'false';
+  } else if (form.id === 'activity-form-floating') {
+    // 浮動表單使用 is-public-floating
+    const isPublicFloating = document.querySelector('#is-public-floating');
+    isPublicValue = isPublicFloating?.checked ? 'true' : 'false';
+  }
+  formData.set('isPublic', isPublicValue);
 
   try {
-    setMessage(activityMessage, isEditing ? 'Updating...' : 'Saving...', null);
+    setMessage(messageElement, isEditing ? 'Updating...' : 'Saving...', null);
     if (isEditing) {
       await api.updateActivity(state.editingActivityId, formData);
-      setMessage(activityMessage, '活動已更新。', 'success');
+      setMessage(messageElement, '活動已更新。', 'success');
     } else {
       await api.createActivity(formData);
-      setMessage(activityMessage, '活動已保存。', 'success');
+      setMessage(messageElement, '活動已保存。', 'success');
     }
     resetActivityForm({ keepMessage: true });
     await Promise.all([refreshActivities(), refreshPublicActivities()]);
+    
+    // 關閉浮動表單
+    const floatingModal = document.getElementById('floating-form-modal');
+    if (floatingModal) {
+      floatingModal.hidden = true;
+    }
   } catch (err) {
     if (err.message === 'Unauthorized') return;
     console.error(err);
-    setMessage(activityMessage, err.message, 'error');
+    setMessage(messageElement, err.message, 'error');
   }
+}
+
+activityForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await handleActivitySubmit(activityForm, activityMessage);
 });
+
+// 為浮動表單也添加事件監聽
+const floatingForm = document.getElementById('activity-form-floating');
+const floatingMessage = document.querySelector('#floating-form-modal .form-message') || activityMessage;
+
+if (floatingForm) {
+  floatingForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await handleActivitySubmit(floatingForm, floatingMessage);
+  });
+}
 
 // 頁面切換函式 - 必須在 applyAuthView 之前定義
 function switchPage(pageName) {
