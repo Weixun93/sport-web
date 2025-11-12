@@ -229,6 +229,28 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// *** 檢查用戶名是否可用 ***
+app.get('/api/check-username', async (req, res) => {
+  const { username } = req.query;
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required.' });
+  }
+  const normalizedUsername = String(username).trim();
+  try {
+    const existingUser = await pool.query('SELECT id FROM users WHERE username = $1', [normalizedUsername]);
+    const isAvailable = existingUser.rows.length === 0;
+    res.json({
+      data: {
+        username: normalizedUsername,
+        available: isAvailable
+      }
+    });
+  } catch (err) {
+    console.error('Username check error:', err);
+    res.status(500).json({ error: 'Server error during username check.' });
+  }
+});
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {

@@ -873,6 +873,15 @@ const api = {
     return data.data;
   },
 
+  async checkUsername(username) {
+    const response = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Username check failed');
+    }
+    return data.data;
+  },
+
   async login(credentials) {
     const response = await fetch('/api/login', {
       method: 'POST',
@@ -1708,6 +1717,22 @@ registerForm.addEventListener('submit', async (event) => {
   const normalizedUsername = (payload.username || '').trim();
   payload.username = normalizedUsername;
 
+  // 檢查用戶名是否可用
+  if (normalizedUsername) {
+    try {
+      const usernameCheck = await checkUsernameAvailability(normalizedUsername);
+      if (!usernameCheck.available) {
+        setMessage(registerMessage, '此用戶名已被使用，請選擇其他用戶名。', 'error');
+        registerUsernameInput.focus();
+        return;
+      }
+    } catch (err) {
+      console.error('Username check error during registration:', err);
+      setMessage(registerMessage, '檢查用戶名時發生錯誤，請稍後再試。', 'error');
+      return;
+    }
+  }
+
   try {
     setMessage(registerMessage, 'Registering...', null);
     const data = await api.register(payload);
@@ -1953,7 +1978,91 @@ pageTabs.forEach(tab => {
   });
 });
 
-// ========== 修改密碼功能 ==========
+// ========== 用戶名檢查功能 ==========
+// 用戶名檢查的延遲計時器
+let usernameCheckTimer = null;
+
+// 檢查用戶名是否可用
+async function checkUsernameAvailability(username) {
+  if (!username || username.trim().length === 0) {
+    return { available: true, message: '' }; // 空用戶名視為可用
+  }
+  
+  const trimmedUsername = username.trim();
+  
+  try {
+    const result = await api.checkUsername(trimmedUsername);
+    return {
+      available: result.available,
+      message: result.available ? '用戶名可用' : '此用戶名已被使用'
+    };
+  } catch (err) {
+    console.error('Username check error:', err);
+    return { available: false, message: '檢查用戶名時發生錯誤' };
+  }
+}
+
+// 更新用戶名輸入框的狀態
+function updateUsernameInputState(available, message) {
+  const usernameGroup = registerUsernameInput?.closest('.form-group');
+  if (!usernameGroup) return;
+  
+  // 移除現有的狀態類
+  usernameGroup.classList.remove('username-available', 'username-taken', 'username-checking');
+  
+  if (message) {
+    if (available === true) {
+      usernameGroup.classList.add('username-available');
+    } else if (available === false) {
+      usernameGroup.classList.add('username-taken');
+    } else {
+      usernameGroup.classList.add('username-checking');
+    }
+  }
+  
+  // 更新或創建狀態訊息元素
+  let statusElement = usernameGroup.querySelector('.username-status');
+  if (!statusElement) {
+    statusElement = document.createElement('div');
+    statusElement.className = 'username-status';
+    registerUsernameInput.parentNode.insertBefore(statusElement, registerUsernameInput.nextSibling);
+  }
+  
+  statusElement.textContent = message;
+  statusElement.className = 'username-status';
+  
+  if (available === true) {
+    statusElement.classList.add('available');
+  } else if (available === false) {
+    statusElement.classList.add('taken');
+  } else {
+    statusElement.classList.add('checking');
+  }
+}
+
+// 用戶名輸入事件處理
+function handleUsernameInput(event) {
+  const username = event.target.value;
+  
+  // 清除之前的計時器
+  if (usernameCheckTimer) {
+    clearTimeout(usernameCheckTimer);
+  }
+  
+  if (!username || username.trim().length === 0) {
+    updateUsernameInputState(true, '');
+    return;
+  }
+  
+  // 顯示檢查中狀態
+  updateUsernameInputState(null, '檢查中...');
+  
+  // 延遲檢查以避免過度請求
+  usernameCheckTimer = setTimeout(async () => {
+    const result = await checkUsernameAvailability(username);
+    updateUsernameInputState(result.available, result.message);
+  }, 500); // 500ms 延遲
+}
 function showChangePasswordModal() {
   if (changePasswordModal) {
     changePasswordModal.removeAttribute('hidden');
@@ -2042,6 +2151,12 @@ if (changePasswordBtn) {
 
 if (deleteAccountBtn) {
   deleteAccountBtn.addEventListener('click', showDeleteAccountModal);
+}
+
+// 用戶名檢查事件監聽器
+if (registerUsernameInput) {
+  registerUsernameInput.addEventListener('input', handleUsernameInput);
+  registerUsernameInput.addEventListener('blur', handleUsernameInput); // 失去焦點時也檢查
 }
 
 // 對話框關閉按鈕

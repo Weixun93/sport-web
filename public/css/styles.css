@@ -1994,3 +1994,42 @@ body:not(.is-authenticated) .fab-button {
   text-align: center;
 }
 
+/* ========== 用戶名檢查狀態樣式 ========== */
+.username-status {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0;
+  min-height: 1rem;
+  transition: all 0.2s ease;
+}
+
+.username-status.available {
+  color: #7a8b96;
+  font-weight: 500;
+}
+
+.username-status.taken {
+  color: #c8697a;
+  font-weight: 500;
+}
+
+.username-status.checking {
+  color: #7a8b96;
+  font-style: italic;
+}
+
+.form-group.username-available .form-field input {
+  border-color: #7a8b96;
+  background: rgba(122, 139, 150, 0.05);
+}
+
+.form-group.username-taken .form-field input {
+  border-color: #c8697a;
+  background: rgba(200, 105, 122, 0.05);
+}
+
+.form-group.username-checking .form-field input {
+  border-color: #7a8b96;
+  background: rgba(122, 139, 150, 0.05);
+}
+
