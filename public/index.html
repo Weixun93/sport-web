@@ -24,6 +24,10 @@
           <p class="sidebar-username" id="sidebar-username">用戶名稱</p>
           <p class="sidebar-display-name" id="sidebar-display-name">使用者名稱</p>
         </div>
+        <div class="sidebar-actions">
+          <button type="button" id="change-password-btn" class="sidebar-action-btn">修改密碼</button>
+          <button type="button" id="delete-account-btn" class="sidebar-action-btn danger">刪除帳號</button>
+        </div>
         <div class="sidebar-bottom">
           <button type="button" id="logout-btn" class="logout-btn">登出</button>
         </div>
@@ -195,7 +199,69 @@
           <ul id="activity-list" class="activity-list"></ul>
         </section>
       </div>
+              </div>
+      </div>
       <!-- 結束紀錄頁面 -->
+
+      <!-- 修改密碼對話框 -->
+      <div id="change-password-modal" class="modal" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>修改密碼</h3>
+            <button type="button" class="modal-close" id="change-password-close">✕</button>
+          </div>
+          <form id="change-password-form" class="modal-form">
+            <div class="form-field">
+              <label for="current-password">目前密碼</label>
+              <input id="current-password" name="currentPassword" type="password" required />
+            </div>
+            <div class="form-field">
+              <label for="new-password">新密碼（至少6個字符）</label>
+              <input id="new-password" name="newPassword" type="password" minlength="6" required />
+            </div>
+            <div class="form-field">
+              <label for="confirm-password">確認新密碼</label>
+              <input id="confirm-password" name="confirmPassword" type="password" required />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="primary">修改密碼</button>
+              <button type="button" class="secondary" id="change-password-cancel">取消</button>
+            </div>
+            <p id="change-password-message" class="form-message"></p>
+          </form>
+        </div>
+      </div>
+
+      <!-- 刪除帳號對話框 -->
+      <div id="delete-account-modal" class="modal" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>刪除帳號</h3>
+            <button type="button" class="modal-close" id="delete-account-close">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="warning-text">⚠️ 警告：此操作無法撤銷！</p>
+            <p>刪除帳號將永久刪除您的所有資料，包括：</p>
+            <ul>
+              <li>您的個人資料</li>
+              <li>所有運動記錄</li>
+              <li>上傳的照片</li>
+            </ul>
+            <p>請輸入您的密碼以確認刪除：</p>
+          </div>
+          <form id="delete-account-form" class="modal-form">
+            <div class="form-field">
+              <label for="delete-password">密碼</label>
+              <input id="delete-password" name="password" type="password" required />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="danger">確認刪除</button>
+              <button type="button" class="secondary" id="delete-account-cancel">取消</button>
+            </div>
+            <p id="delete-account-message" class="form-message"></p>
+          </form>
+        </div>
+      </div>
 
       <!-- 浮動操作按鈕 - 新增紀錄 -->
       <button type="button" id="fab-add-record" class="fab-button" aria-label="新增紀錄">

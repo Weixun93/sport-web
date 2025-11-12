@@ -522,6 +522,80 @@ app.delete('/api/activities/:activityId', requireAuth, async (req, res, next) =>
   }
 });
 
+// *** 修改密碼 ***
+app.put('/api/user/password', requireAuth, async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'currentPassword and newPassword are required fields.' });
+  }
+  
+  if (String(newPassword).length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+  }
+  
+  try {
+    // 驗證當前密碼
+    const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    const isValidPassword = await bcrypt.compare(String(currentPassword), userResult.rows[0].password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    
+    // 更新密碼
+    const newPasswordHash = await bcrypt.hash(String(newPassword), 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, req.userId]);
+    
+    // 刪除所有現有會話，強制重新登入
+    await pool.query('DELETE FROM sessions WHERE user_id = $1', [req.userId]);
+    
+    res.json({ data: { message: 'Password updated successfully. Please log in again.' } });
+  } catch (err) {
+    console.error('Password update error:', err);
+    res.status(500).json({ error: 'Server error during password update.' });
+  }
+});
+
+// *** 刪除帳號 ***
+app.delete('/api/user', requireAuth, async (req, res, next) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required to delete account.' });
+  }
+  
+  try {
+    // 驗證密碼
+    const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    const isValidPassword = await bcrypt.compare(String(password), userResult.rows[0].password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Password is incorrect.' });
+    }
+    
+    // 刪除用戶的所有活動（由於外鍵約束，會自動刪除）
+    await pool.query('DELETE FROM activities WHERE owner_id = $1', [req.userId]);
+    
+    // 刪除用戶的所有會話
+    await pool.query('DELETE FROM sessions WHERE user_id = $1', [req.userId]);
+    
+    // 刪除用戶
+    await pool.query('DELETE FROM users WHERE id = $1', [req.userId]);
+    
+    res.json({ data: { message: 'Account deleted successfully.' } });
+  } catch (err) {
+    console.error('Account deletion error:', err);
+    res.status(500).json({ error: 'Server error during account deletion.' });
+  }
+});
+
 // --- 錯誤處理中介軟體 ---
 app.use((req, res) => {
   res.status(404).json({ error: `Route not found: ${req.originalUrl}` });

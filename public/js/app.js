@@ -20,9 +20,18 @@ const Storage = {
   },
   clearUser: () => localStorage.removeItem('auth_user'),
   
+  // 會話管理相關
+  setSessionStartTime: (time) => sessionStorage.setItem('session_start_time', time),
+  getSessionStartTime: () => sessionStorage.getItem('session_start_time'),
+  setPageClosed: (closed) => sessionStorage.setItem('page_closed', closed ? 'true' : 'false'),
+  getPageClosed: () => sessionStorage.getItem('page_closed') === 'true',
+  setLastActivity: (time) => localStorage.setItem('last_activity', time),
+  getLastActivity: () => localStorage.getItem('last_activity'),
+  
   clearAll: () => {
     Storage.clearAuthToken();
     Storage.clearUser();
+    Storage.setLastActivity(null);
   }
 };
 
@@ -61,6 +70,18 @@ const loginPasswordInput = document.querySelector('#login-password');
 const registerUsernameInput = document.querySelector('#register-username');
 const toggleHistoryButton = document.querySelector('#toggle-history-btn');
 
+// 側邊欄按鈕
+const changePasswordBtn = document.querySelector('#change-password-btn');
+const deleteAccountBtn = document.querySelector('#delete-account-btn');
+
+// 對話框元素
+const changePasswordModal = document.querySelector('#change-password-modal');
+const deleteAccountModal = document.querySelector('#delete-account-modal');
+const changePasswordForm = document.querySelector('#change-password-form');
+const deleteAccountForm = document.querySelector('#delete-account-form');
+const changePasswordMessage = document.querySelector('#change-password-message');
+const deleteAccountMessage = document.querySelector('#delete-account-message');
+
 const today = new Date();
 
 const state = {
@@ -73,6 +94,111 @@ const state = {
   editingActivityId: null,
   calendarMonth: new Date(today.getFullYear(), today.getMonth(), 1),
   selectedCalendarDate: null
+};
+
+// 會話管理器 - 處理自動登出邏輯
+const SessionManager = {
+  // 常數定義
+  IDLE_TIMEOUT: 10 * 60 * 1000, // 10分鐘
+  ACTIVITY_EVENTS: ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'],
+  
+  // 狀態
+  idleTimer: null,
+  isInitialized: false,
+  
+  // 初始化會話管理
+  init() {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+    
+    // 設置頁面可見性監聽器
+    this.setupVisibilityListener();
+    
+    // 設置活動監聽器
+    this.setupActivityListeners();
+    
+    // 設置頁面卸載監聽器
+    this.setupUnloadListener();
+    
+    // 開始閒置計時器
+    this.resetIdleTimer();
+    
+    console.log('🔐 SessionManager initialized');
+  },
+  
+  // 設置頁面可見性監聽器
+  setupVisibilityListener() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // 頁面隱藏時，記錄當前時間
+        Storage.setLastActivity(Date.now().toString());
+      } else {
+        // 頁面重新顯示時，重置計時器
+        this.resetIdleTimer();
+      }
+    });
+  },
+  
+  // 設置用戶活動監聽器
+  setupActivityListeners() {
+    this.ACTIVITY_EVENTS.forEach(event => {
+      document.addEventListener(event, () => this.handleUserActivity(), { passive: true });
+    });
+  },
+  
+  // 設置頁面卸載監聽器
+  setupUnloadListener() {
+    window.addEventListener('beforeunload', () => {
+      // 頁面關閉時標記為已關閉
+      Storage.setPageClosed(true);
+    });
+  },
+  
+  // 處理用戶活動
+  handleUserActivity() {
+    this.resetIdleTimer();
+  },
+  
+  // 重置閒置計時器
+  resetIdleTimer() {
+    // 清除現有計時器
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+    }
+    
+    // 記錄最後活動時間
+    Storage.setLastActivity(Date.now().toString());
+    
+    // 設置新計時器
+    this.idleTimer = setTimeout(() => {
+      console.log('⏰ Idle timeout reached, logging out...');
+      this.logoutDueToInactivity();
+    }, this.IDLE_TIMEOUT);
+  },
+  
+  // 因閒置自動登出
+  logoutDueToInactivity() {
+    logout('因長時間未活動，已自動登出。');
+  },
+  
+  // 檢查是否需要因頁面關閉而登出
+  checkPageCloseLogout() {
+    if (Storage.getPageClosed()) {
+      console.log('🚪 Page was closed, clearing session...');
+      Storage.clearAll();
+      Storage.setPageClosed(false); // 重置標記
+      return true; // 需要登出
+    }
+    return false;
+  },
+  
+  // 清理資源
+  destroy() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+    }
+    this.isInitialized = false;
+  }
 };
 
 let authMode = 'login';
@@ -645,6 +771,19 @@ function applyAuthView() {
     }
   }
 
+  // 更新側邊欄用戶資訊
+  if (isAuthenticated && state.user) {
+    const sidebarUsername = document.querySelector('#sidebar-username');
+    const sidebarDisplayName = document.querySelector('#sidebar-display-name');
+    
+    if (sidebarUsername) {
+      sidebarUsername.textContent = '用戶名稱: ' + (state.user.username || '用戶名稱');
+    }
+    if (sidebarDisplayName) {
+      sidebarDisplayName.textContent = '顯示名稱: ' + (state.user.displayName || state.user.username || '使用者名稱');
+    }
+  }
+
   // 登入後才顯示第二橫幅
   const secondaryHeader = document.querySelector('#secondary-header');
   if (secondaryHeader) {
@@ -664,6 +803,9 @@ function applyAuthView() {
 }
 
 function logout(reason) {
+  // 清理會話管理器
+  SessionManager.destroy();
+  
   state.token = null;
   state.user = null;
   state.weather = null;
@@ -802,6 +944,30 @@ const api = {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || 'Failed to load weather');
+    }
+    return payload.data;
+  },
+
+  async changePassword(passwordData) {
+    const response = await authorizedFetch('/api/user/password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to change password');
+    }
+    return payload.data;
+  },
+
+  async deleteAccount(password) {
+    const response = await authorizedFetch('/api/user', {
+      method: 'DELETE',
+      body: JSON.stringify({ password })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to delete account');
     }
     return payload.data;
   }
@@ -1015,12 +1181,33 @@ if (calendarPrevButton) {
 
 // 會話恢復函數 - 在頁面加載時自動恢復登入狀態
 function restoreSessionIfExists() {
+  // 檢查是否因頁面關閉而需要清除會話
+  if (SessionManager.checkPageCloseLogout()) {
+    console.log('🚪 Session cleared due to page close');
+    return;
+  }
+  
   const token = Storage.getAuthToken();
   const user = Storage.getUser();
   if (token && user) {
+    // 檢查最後活動時間是否超過閒置超時
+    const lastActivity = Storage.getLastActivity();
+    if (lastActivity) {
+      const timeSinceLastActivity = Date.now() - parseInt(lastActivity);
+      if (timeSinceLastActivity > SessionManager.IDLE_TIMEOUT) {
+        console.log('⏰ Session expired due to idle timeout');
+        Storage.clearAll();
+        return;
+      }
+    }
+    
     state.token = token;
     state.user = user;
     applyAuthView();
+    
+    // 初始化會話管理器
+    SessionManager.init();
+    
     // 自動刷新數據
     Promise.all([refreshActivities(), refreshPublicActivities(), refreshWeather()]).catch(err => {
       console.error('Failed to refresh data after session restore:', err);
@@ -1493,9 +1680,17 @@ loginForm.addEventListener('submit', async (event) => {
     // 保存登入信息到 localStorage
     Storage.setAuthToken(data.token);
     Storage.setUser(data.user);
+    // 設置會話開始時間和最後活動時間
+    Storage.setSessionStartTime(Date.now().toString());
+    Storage.setLastActivity(Date.now().toString());
+    Storage.setPageClosed(false); // 重置頁面關閉標記
     setMessage(loginMessage, '', null);
     loginForm.reset();
     applyAuthView();
+    
+    // 初始化會話管理器
+    SessionManager.init();
+    
     await Promise.all([refreshActivities(), refreshPublicActivities(), refreshWeather()]);
   } catch (err) {
     console.error(err);
@@ -1757,4 +1952,126 @@ pageTabs.forEach(tab => {
     switchPage(page);
   });
 });
+
+// ========== 修改密碼功能 ==========
+function showChangePasswordModal() {
+  if (changePasswordModal) {
+    changePasswordModal.removeAttribute('hidden');
+    changePasswordForm.reset();
+    setMessage(changePasswordMessage, '', null);
+  }
+}
+
+function hideChangePasswordModal() {
+  if (changePasswordModal) {
+    changePasswordModal.setAttribute('hidden', 'true');
+  }
+}
+
+async function handleChangePassword(event) {
+  event.preventDefault();
+  const formData = new FormData(changePasswordForm);
+  const passwordData = Object.fromEntries(formData.entries());
+  
+  if (passwordData.newPassword !== passwordData.confirmPassword) {
+    setMessage(changePasswordMessage, '新密碼與確認密碼不符。', 'error');
+    return;
+  }
+  
+  try {
+    setMessage(changePasswordMessage, '正在修改密碼...', null);
+    await api.changePassword({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
+    });
+    setMessage(changePasswordMessage, '密碼修改成功！請重新登入。', 'success');
+    changePasswordForm.reset();
+    setTimeout(() => {
+      hideChangePasswordModal();
+      logout('密碼已修改，請重新登入。');
+    }, 2000);
+  } catch (err) {
+    console.error('Change password error:', err);
+    setMessage(changePasswordMessage, err.message, 'error');
+  }
+}
+
+// ========== 刪除帳號功能 ==========
+function showDeleteAccountModal() {
+  if (deleteAccountModal) {
+    deleteAccountModal.removeAttribute('hidden');
+    deleteAccountForm.reset();
+    setMessage(deleteAccountMessage, '', null);
+  }
+}
+
+function hideDeleteAccountModal() {
+  if (deleteAccountModal) {
+    deleteAccountModal.setAttribute('hidden', 'true');
+  }
+}
+
+async function handleDeleteAccount(event) {
+  event.preventDefault();
+  const formData = new FormData(deleteAccountForm);
+  const password = formData.get('password');
+  
+  // 再次確認
+  const confirmed = window.confirm('確定要刪除帳號嗎？此操作無法撤銷！');
+  if (!confirmed) return;
+  
+  try {
+    setMessage(deleteAccountMessage, '正在刪除帳號...', null);
+    await api.deleteAccount(password);
+    setMessage(deleteAccountMessage, '帳號已刪除。', 'success');
+    deleteAccountForm.reset();
+    setTimeout(() => {
+      hideDeleteAccountModal();
+      logout('帳號已刪除。');
+    }, 2000);
+  } catch (err) {
+    console.error('Delete account error:', err);
+    setMessage(deleteAccountMessage, err.message, 'error');
+  }
+}
+
+// ========== 事件監聽器 ==========
+if (changePasswordBtn) {
+  changePasswordBtn.addEventListener('click', showChangePasswordModal);
+}
+
+if (deleteAccountBtn) {
+  deleteAccountBtn.addEventListener('click', showDeleteAccountModal);
+}
+
+// 對話框關閉按鈕
+document.querySelectorAll('.modal-close, [id$="-close"], [id$="-cancel"]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const modalId = e.target.id.replace('-close', '').replace('-cancel', '');
+    if (modalId.includes('change-password')) {
+      hideChangePasswordModal();
+    } else if (modalId.includes('delete-account')) {
+      hideDeleteAccountModal();
+    }
+  });
+});
+
+// 點擊背景關閉對話框
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.setAttribute('hidden', 'true');
+    }
+  });
+});
+
+// 表單提交
+if (changePasswordForm) {
+  changePasswordForm.addEventListener('submit', handleChangePassword);
+}
+
+if (deleteAccountForm) {
+  deleteAccountForm.addEventListener('submit', handleDeleteAccount);
+}
 
