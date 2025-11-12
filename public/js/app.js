@@ -174,6 +174,8 @@ function initializeActivityFormToggle() {
 }
 
 function resetActivityForm({ keepMessage = false } = {}) {
+  console.log('🔄 resetActivityForm called');
+  
   // 重置主表單
   if (activityForm) {
     activityForm.reset();
@@ -185,6 +187,9 @@ function resetActivityForm({ keepMessage = false } = {}) {
   if (photoInput) {
     photoInput.value = '';
   }
+    // 清空照片檔名顯示
+    const photoNameDisplay = document.querySelector('#photo-floating-name');
+    if (photoNameDisplay) photoNameDisplay.textContent = '';
   
   // 重置浮動表單所有字段
   const floatingForm = document.getElementById('activity-form-floating');
@@ -221,9 +226,43 @@ function resetActivityForm({ keepMessage = false } = {}) {
         btn.classList.add('active');
       }
     });
+    
+    // 重置日期滑塊為今天
+    const yearSliderEl = document.querySelector('#year-slider');
+    const monthSliderEl = document.querySelector('#month-slider');
+    const daySliderEl = document.querySelector('#day-slider');
+    
+    if (yearSliderEl && monthSliderEl && daySliderEl) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth() + 1;
+      const day = today.getDate();
+      
+      yearSliderEl.value = year;
+      monthSliderEl.value = month;
+      daySliderEl.value = day;
+      
+      // 更新日期顯示
+      const yearDisplay = document.querySelector('#year-display');
+      const monthDisplay = document.querySelector('#month-display');
+      const dayDisplay = document.querySelector('#day-display');
+      const dateResultDisplay = document.querySelector('#date-result-display');
+      const dateField = document.querySelector('#date-floating');
+      
+      if (yearDisplay) yearDisplay.textContent = year;
+      if (monthDisplay) monthDisplay.textContent = month;
+      if (dayDisplay) dayDisplay.textContent = String(day).padStart(2, '0');
+      
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (dateResultDisplay) dateResultDisplay.textContent = dateStr;
+      if (dateField) dateField.value = dateStr;
+      
+      console.log('✅ Reset date sliders to today:', dateStr);
+    }
   }
   
   state.editingActivityId = null;
+  console.log('✅ Reset editingActivityId to null');
   
   // 重置主表單提交按鈕
   if (activitySubmitButton) {
@@ -249,6 +288,8 @@ function resetActivityForm({ keepMessage = false } = {}) {
   if (!keepMessage) {
     setMessage(activityMessage, '', null);
   }
+  
+  console.log('✅ resetActivityForm completed');
 }
 
 function startEditing(activity) {
@@ -302,12 +343,31 @@ function startEditing(activity) {
     sportField.value = activity.sport || '';
     
     // 更新 emoji 和運動名稱顯示
-    const sportInfo = SPORTS.find(s => s.name === activity.sport);
-    if (sportInfo) {
-      const emoji = document.querySelector('#sport-selected-emoji');
-      if (emoji) emoji.textContent = sportInfo.emoji;
-      console.log('✅ Updated sport emoji to:', sportInfo.emoji);
+    // 嘗試從運動選擇器按鈕中查找對應的 emoji
+    const sportButtons = document.querySelectorAll('.sport-selector-item');
+    let foundEmoji = null;
+    for (const btn of sportButtons) {
+      if (btn.textContent.includes(activity.sport)) {
+        const emojiElement = btn.querySelector('.sport-selector-emoji');
+        if (emojiElement) {
+          foundEmoji = emojiElement.textContent;
+          break;
+        }
+      }
     }
+    
+    const emoji = document.querySelector('#sport-selected-emoji');
+    if (emoji) {
+      if (foundEmoji) {
+        emoji.textContent = foundEmoji;
+        console.log('✅ Updated sport emoji to:', foundEmoji);
+      } else {
+        // 如果沒找到，使用默認
+        emoji.textContent = '🏃';
+        console.log('⚠️ Sport emoji not found, using default');
+      }
+    }
+    
     const sportDisplay = document.querySelector('#sport-selected-display');
     if (sportDisplay) {
       sportDisplay.textContent = activity.sport || '選擇運動';
@@ -367,6 +427,13 @@ function startEditing(activity) {
   if (photoField) {
     photoField.value = '';
     console.log('✅ Cleared photo field');
+  }
+  
+  // 顯示原有照片的提示訊息
+  const photoNameDisplay = document.querySelector('#photo-floating-name');
+  if (photoNameDisplay && activity.photoUrl) {
+    photoNameDisplay.textContent = '原有照片將保留（可選擇新照片替換）';
+    console.log('✅ Showed existing photo hint');
   }
   
   // 改變提交按鈕文本為「更新紀錄」
@@ -759,10 +826,10 @@ function renderActivities(activities) {
       }
       <div class="activity-header">
         <span>${activity.date}</span>
-        <span>${activity.sport}</span>
+        <span>時間：${activity.durationMinutes} 分鐘</span>
       </div>
       <div class="activity-meta">
-        <span>時間：${activity.durationMinutes} 分鐘</span>
+        <span>${activity.sport}</span>
         <span>強度：${activity.intensity}</span>
       </div>
       <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
@@ -797,10 +864,10 @@ function renderPublicActivities(activities) {
       }
       <div class="activity-header">
         <span>${activity.date}</span>
-        <span>${activity.sport}</span>
+        <span>時間：${activity.durationMinutes} 分鐘</span>
       </div>
       <div class="activity-meta">
-        <span>時間：${activity.durationMinutes} 分鐘</span>
+        <span>${activity.sport}</span>
         <span>強度：${activity.intensity}</span>
       </div>
       <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
@@ -975,10 +1042,21 @@ const floatingFormClose = document.querySelector('#floating-form-close');
 const floatingFormCancel = document.querySelector('#floating-form-cancel');
 
 function showFloatingForm() {
+  console.log('🆕 showFloatingForm called');
+  // 重置表單以清除編輯狀態
+  resetActivityForm({ keepMessage: false });
+  
+  // 清空浮動表單的訊息
+  const floatingMessage = document.querySelector('#floating-form-modal .form-message');
+  if (floatingMessage) {
+    setMessage(floatingMessage, '', null);
+  }
+  
   if (floatingFormModal) {
     floatingFormModal.removeAttribute('hidden');
     // 設定日期為今天
     setDateToToday();
+    console.log('✅ Floating form opened for new activity, editingActivityId:', state.editingActivityId);
   }
 }
 
@@ -1332,15 +1410,20 @@ const dateInputFloating = document.querySelector('#date-floating');
 
 function updateDateDisplay() {
   const year = yearSlider.value;
-  const month = monthSlider.value.padStart(2, '0');
-  const day = daySlider.value.padStart(2, '0');
+  const month = String(monthSlider.value).padStart(2, '0');
+  const day = String(daySlider.value).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
+  
+  console.log('📅 updateDateDisplay:', { year, month: monthSlider.value, day: daySlider.value, dateStr });
   
   yearDisplay.textContent = year;
   monthDisplay.textContent = monthSlider.value;
   dayDisplay.textContent = day;
   dateResultDisplay.textContent = dateStr;
-  dateInputFloating.value = dateStr;
+  if (dateInputFloating) {
+    dateInputFloating.value = dateStr;
+    console.log('✅ Set dateInputFloating.value to:', dateStr);
+  }
 }
 
 // 月份的最大天數
@@ -1453,6 +1536,7 @@ async function handleActivitySubmit(form, messageElement) {
   // 確保日期格式正確
   const dateValue = formData.get('date');
   console.log('📅 Form date value:', dateValue);
+  console.log('🔍 Current state.editingActivityId:', state.editingActivityId);
   
   // 驗證日期格式 YYYY-MM-DD
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -1464,6 +1548,7 @@ async function handleActivitySubmit(form, messageElement) {
   
   const durationValue = Number(formData.get('durationMinutes'));
   const isEditing = Boolean(state.editingActivityId);
+  console.log('✏️ isEditing:', isEditing, 'editingActivityId:', state.editingActivityId);
 
   if (Number.isNaN(durationValue) || durationValue <= 0) {
     setMessage(messageElement, 'Enter a valid duration (minutes).', 'error');
@@ -1501,17 +1586,25 @@ async function handleActivitySubmit(form, messageElement) {
       sport: sportValue,
       duration: durationValue,
       isPublic: isPublicValue,
-      isEditing
+      isEditing,
+      editingId: state.editingActivityId
     });
     
     if (isEditing) {
+      console.log('📝 Calling updateActivity with id:', state.editingActivityId);
       await api.updateActivity(state.editingActivityId, formData);
       setMessage(messageElement, '活動已更新。', 'success');
     } else {
+      console.log('➕ Calling createActivity (new activity)');
       await api.createActivity(formData);
-      setMessage(messageElement, '活動已保存。', 'success');
+      setMessage(messageElement, '', null);
     }
+    
+    // 在重置前清除編輯狀態
+    console.log('🔄 Resetting form and clearing editingActivityId...');
     resetActivityForm({ keepMessage: true });
+    console.log('✅ After reset, editingActivityId:', state.editingActivityId);
+    
     await Promise.all([refreshActivities(), refreshPublicActivities()]);
     
     // 關閉浮動表單
@@ -1521,7 +1614,7 @@ async function handleActivitySubmit(form, messageElement) {
     }
   } catch (err) {
     if (err.message === 'Unauthorized') return;
-    console.error(err);
+    console.error('❌ Error:', err);
     setMessage(messageElement, err.message, 'error');
   }
 }

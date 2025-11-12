@@ -29,6 +29,14 @@ const pool = new Pool({
 function toISODateString(date) {
   if (!date) return '';
   try {
+    // 如果是字符串，直接返回 YYYY-MM-DD 部分
+    const dateStr = String(date);
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[1]}-${match[2]}-${match[3]}`;
+    }
+    
+    // 如果是 Date 物件，使用 UTC 方法
     const d = new Date(date);
     const year = d.getUTCFullYear();
     const month = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -274,7 +282,7 @@ const requireAuth = async (req, res, next) => {
 app.get('/api/activities', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT a.*, u.display_name as owner_name 
+      `SELECT a.id, a.sport, a.duration_minutes, a.intensity, a.notes, a.photo_url, a.is_public, a.owner_id, a.created_at, a.updated_at, u.display_name as owner_name, to_char(a.date, 'YYYY-MM-DD') AS date_str
        FROM activities a
        JOIN users u ON a.owner_id = u.id
        WHERE a.owner_id = $1 
@@ -284,7 +292,7 @@ app.get('/api/activities', requireAuth, async (req, res, next) => {
     
     const normalized = result.rows.map((activity) => ({
       ...activity,
-      date: toISODateString(activity.date),
+      date: activity.date_str,
       durationMinutes: activity.duration_minutes,
       photoUrl: activity.photo_url,
       isPublic: Boolean(activity.is_public),
@@ -300,7 +308,7 @@ app.get('/api/activities', requireAuth, async (req, res, next) => {
 app.get('/api/activities/public', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT a.*, u.display_name as owner_name 
+      `SELECT a.id, a.sport, a.duration_minutes, a.intensity, a.notes, a.photo_url, a.is_public, a.owner_id, a.created_at, a.updated_at, u.display_name as owner_name, to_char(a.date, 'YYYY-MM-DD') AS date_str
        FROM activities a
        JOIN users u ON a.owner_id = u.id
        WHERE a.is_public = true 
@@ -309,7 +317,7 @@ app.get('/api/activities/public', requireAuth, async (req, res, next) => {
     
     const feed = result.rows.map((activity) => ({
       ...activity,
-      date: toISODateString(activity.date),
+      date: activity.date_str,
       durationMinutes: activity.duration_minutes,
       photoUrl: activity.photo_url,
       isPublic: true,
@@ -344,6 +352,8 @@ app.get('/api/weather', requireAuth, async (req, res, next) => {
 // *** 活動建立 (with 照片上傳) ***
 const createActivity = async (req, res, next) => {
   const { date, sport, durationMinutes, intensity, notes, isPublic } = req.body;
+  console.log('📝 [createActivity] Received date from client:', date);
+  
   if (!date || !sport || !durationMinutes) {
     return res.status(400).json({ error: 'date, sport, and durationMinutes are required fields.' });
   }
@@ -373,10 +383,14 @@ const createActivity = async (req, res, next) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    await pool.query(
+    
+    console.log('📝 [createActivity] About to insert into DB with date:', date);
+    
+    const insertResult = await pool.query(
       `INSERT INTO activities 
         (id, date, sport, duration_minutes, intensity, notes, photo_url, is_public, owner_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
       [
         newActivity.id,
         newActivity.date,
@@ -389,6 +403,10 @@ const createActivity = async (req, res, next) => {
         newActivity.owner_id
       ]
     );
+    
+    const insertedRow = insertResult.rows[0];
+    console.log('📝 [createActivity] Retrieved from DB - raw date:', insertedRow.date, 'Type:', typeof insertedRow.date);
+    
     res.status(201).json({ data: {
       ...newActivity,
       date: toISODateString(newActivity.date),
