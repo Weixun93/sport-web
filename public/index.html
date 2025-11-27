@@ -419,6 +419,31 @@
       </div>
     </main>
 
+    <!-- 留言對話框 -->
+    <div id="comments-modal" class="modal" hidden>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>留言</h3>
+          <button type="button" class="modal-close" id="comments-modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <form id="add-comment-form" class="comment-form">
+            <div class="form-field">
+              <textarea id="comment-input" name="content" placeholder="分享你的想法..." rows="3" required></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="primary">發送留言</button>
+              <button type="button" class="secondary" id="comment-cancel">取消</button>
+            </div>
+            <p id="comment-message" class="form-message"></p>
+          </form>
+          <div id="comments-list-container" class="comments-list-container">
+            <ul id="comments-list" class="comments-list"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer class="page-footer">
     </footer>
 
