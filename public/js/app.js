@@ -1860,11 +1860,12 @@ function switchPage(pageName) {
   const weatherPage = document.getElementById('weather-page');
   const checkinPage = document.getElementById('checkin-page');
   const communityPage = document.getElementById('community-page');
+  const profilePage = document.getElementById('profile-page');
   const recordsPage = document.getElementById('records-page');
   const pageTabs = document.querySelectorAll('.page-tab');
   
   // 移除所有頁面的 active 類
-  [weatherPage, checkinPage, communityPage, recordsPage].forEach(page => {
+  [weatherPage, checkinPage, communityPage, profilePage, recordsPage].forEach(page => {
     page?.classList.remove('active');
   });
 
@@ -1878,6 +1879,10 @@ function switchPage(pageName) {
       break;
     case 'community':
       communityPage?.classList.add('active');
+      break;
+    case 'profile':
+      profilePage?.classList.add('active');
+      refreshProfilePage();
       break;
     case 'records':
       recordsPage?.classList.add('active');
@@ -2062,6 +2067,94 @@ function handleUsernameInput(event) {
     const result = await checkUsernameAvailability(username);
     updateUsernameInputState(result.available, result.message);
   }, 500); // 500ms 延遲
+}
+
+// ========== 個人頁面功能 ==========
+async function refreshProfilePage() {
+  if (!state.token || !state.user) return;
+  
+  try {
+    // 更新個人資料卡片
+    const profileAvatar = document.querySelector('#profile-avatar');
+    const profileDisplayName = document.querySelector('#profile-display-name');
+    const profileUsername = document.querySelector('#profile-username');
+    const profilePostCount = document.querySelector('#profile-post-count');
+    
+    if (profileAvatar) {
+      profileAvatar.src = '/images/profile img.png';
+      profileAvatar.alt = `${state.user.displayName || state.user.username} avatar`;
+    }
+    
+    if (profileDisplayName) {
+      profileDisplayName.textContent = state.user.displayName || state.user.username;
+    }
+    
+    if (profileUsername) {
+      profileUsername.textContent = `@${state.user.username}`;
+    }
+    
+    // 刷新個人發布的活動
+    const profileActivityList = document.querySelector('#profile-activity-list');
+    if (profileActivityList) {
+      // 使用已加載的 state.activities
+      const userActivities = state.activities || [];
+      
+      if (profilePostCount) {
+        profilePostCount.textContent = userActivities.length;
+      }
+      
+      renderProfileActivities(userActivities);
+    }
+  } catch (err) {
+    console.error('Error refreshing profile page:', err);
+  }
+}
+
+function renderProfileActivities(activities) {
+  const profileActivityList = document.querySelector('#profile-activity-list');
+  if (!profileActivityList) return;
+  
+  profileActivityList.innerHTML = '';
+  
+  if (!activities.length) {
+    profileActivityList.innerHTML = '<li class="empty-state">還沒有發布任何運動記錄，開始記錄你的運動吧！</li>';
+    return;
+  }
+  
+  // 按時間倒序排列（最新的優先）
+  const sortedActivities = [...activities].sort((a, b) => {
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  
+  for (const activity of sortedActivities) {
+    const item = document.createElement('li');
+    const isPublic = Boolean(activity.isPublic);
+    item.innerHTML = `
+      ${
+        activity.photoUrl
+          ? `<img class="activity-photo" src="${activity.photoUrl}" alt="${activity.sport} photo" loading="lazy" />`
+          : ''
+      }
+      <div class="activity-header">
+        <span>${activity.date}</span>
+        <span>時間：${activity.durationMinutes} 分鐘</span>
+      </div>
+      <div class="activity-meta">
+        <span>${activity.sport}</span>
+        <span>強度：${activity.intensity}</span>
+      </div>
+      <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
+      ${activity.notes ? `<p class="activity-notes">${activity.notes}</p>` : ''}
+      <div class="activity-actions">
+        <button type="button" class="secondary small" data-action="edit" data-id="${activity.id}">編輯</button>
+        <button type="button" class="danger small" data-action="delete" data-id="${activity.id}">刪除</button>
+      </div>
+    `;
+    profileActivityList.appendChild(item);
+  }
+  
+  // 為個人頁面的活動列表添加事件監聽
+  profileActivityList.addEventListener('click', handleActivityListClick);
 }
 function showChangePasswordModal() {
   if (changePasswordModal) {

@@ -119,6 +119,7 @@
           <button type="button" class="page-tab active" data-page="weather">天氣</button>
           <button type="button" class="page-tab" data-page="checkin">打卡</button>
           <button type="button" class="page-tab" data-page="community">動態</button>
+          <button type="button" class="page-tab" data-page="profile">個人</button>
           <button type="button" class="page-tab" data-page="records">紀錄</button>
         </div>
       </div>
@@ -191,6 +192,26 @@
         </section>
       </div>
       <!-- 結束社群頁面 -->
+
+      <div id="profile-page" class="page-content">
+        <!-- 個人頁面內容 -->
+        <section class="card full-width profile-header-card">
+          <div class="profile-header">
+            <div class="profile-avatar-container">
+              <img src="" alt="個人頭像" id="profile-avatar" class="profile-avatar" />
+            </div>
+            <div class="profile-info">
+              <h2 id="profile-display-name">用戶名稱</h2>
+              <p id="profile-username" class="profile-username">@username</p>
+              <p id="profile-stats" class="profile-stats">發布 <span id="profile-post-count">0</span> 篇文章</p>
+            </div>
+          </div>
+        </section>
+        <section class="card full-width">
+          <ul id="profile-activity-list" class="activity-list"></ul>
+        </section>
+      </div>
+      <!-- 結束個人頁面 -->
 
       <div id="records-page" class="page-content">
         <!-- 紀錄頁面內容 -->
