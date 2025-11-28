@@ -90,6 +90,29 @@ async function initializeDatabase() {
       );
     `);
 
+    // 建立 likes 資料表 (用於儲存按讚信息)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS likes (
+        id TEXT PRIMARY KEY,
+        activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(activity_id, user_id)
+      );
+    `);
+
+    // 建立 comments 資料表 (用於儲存留言)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS comments (
+        id TEXT PRIMARY KEY,
+        activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     console.log('Database tables checked/created successfully.');
 
     // *** NEW: 插入範例使用者 (如果他不存在)，並使用 bcrypt 加密密碼 ***
@@ -777,6 +800,218 @@ app.delete('/api/user', requireAuth, async (req, res, next) => {
   } catch (err) {
     console.error('Account deletion error:', err);
     res.status(500).json({ error: 'Server error during account deletion.' });
+  }
+});
+
+// ========== 按讚功能 ==========
+// 按讚
+app.post('/api/activities/:activityId/like', requireAuth, async (req, res, next) => {
+  const { activityId } = req.params;
+  
+  try {
+    // 檢查活動是否存在
+    const activityCheck = await pool.query('SELECT id FROM activities WHERE id = $1', [activityId]);
+    if (activityCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Activity not found.' });
+    }
+    
+    // 檢查是否已經按讚
+    const likeCheck = await pool.query(
+      'SELECT id FROM likes WHERE activity_id = $1 AND user_id = $2',
+      [activityId, req.userId]
+    );
+    
+    if (likeCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Already liked this activity.' });
+    }
+    
+    // 添加按讚
+    const likeId = `like-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+    await pool.query(
+      'INSERT INTO likes (id, activity_id, user_id) VALUES ($1, $2, $3)',
+      [likeId, activityId, req.userId]
+    );
+    
+    // 獲取更新後的按讚數
+    const likeCountResult = await pool.query(
+      'SELECT COUNT(*) as count FROM likes WHERE activity_id = $1',
+      [activityId]
+    );
+    
+    res.json({
+      data: {
+        likeId,
+        likeCount: parseInt(likeCountResult.rows[0].count)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 取消按讚
+app.delete('/api/activities/:activityId/like', requireAuth, async (req, res, next) => {
+  const { activityId } = req.params;
+  
+  try {
+    // 刪除按讚
+    const result = await pool.query(
+      'DELETE FROM likes WHERE activity_id = $1 AND user_id = $2',
+      [activityId, req.userId]
+    );
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Like not found.' });
+    }
+    
+    // 獲取更新後的按讚數
+    const likeCountResult = await pool.query(
+      'SELECT COUNT(*) as count FROM likes WHERE activity_id = $1',
+      [activityId]
+    );
+    
+    res.json({
+      data: {
+        likeCount: parseInt(likeCountResult.rows[0].count)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 獲取按讚數和用戶是否已按讚
+app.get('/api/activities/:activityId/likes', requireAuth, async (req, res, next) => {
+  const { activityId } = req.params;
+  
+  try {
+    // 獲取按讚數
+    const likeCountResult = await pool.query(
+      'SELECT COUNT(*) as count FROM likes WHERE activity_id = $1',
+      [activityId]
+    );
+    
+    // 檢查當前用戶是否已按讚
+    const userLikeResult = await pool.query(
+      'SELECT id FROM likes WHERE activity_id = $1 AND user_id = $2',
+      [activityId, req.userId]
+    );
+    
+    res.json({
+      data: {
+        likeCount: parseInt(likeCountResult.rows[0].count),
+        userLiked: userLikeResult.rows.length > 0
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ========== 留言功能 ==========
+// 添加留言
+app.post('/api/activities/:activityId/comments', requireAuth, async (req, res, next) => {
+  const { activityId } = req.params;
+  const { content } = req.body;
+  
+  if (!content || String(content).trim().length === 0) {
+    return res.status(400).json({ error: 'Comment content is required.' });
+  }
+  
+  try {
+    // 檢查活動是否存在
+    const activityCheck = await pool.query('SELECT id FROM activities WHERE id = $1', [activityId]);
+    if (activityCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Activity not found.' });
+    }
+    
+    // 添加留言
+    const commentId = `comment-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+    const trimmedContent = String(content).trim();
+    
+    const result = await pool.query(
+      `INSERT INTO comments (id, activity_id, user_id, content) VALUES ($1, $2, $3, $4)
+       RETURNING id, content, created_at`,
+      [commentId, activityId, req.userId, trimmedContent]
+    );
+    
+    const comment = result.rows[0];
+    
+    // 獲取留言者信息
+    const userResult = await pool.query(
+      'SELECT username, display_name FROM users WHERE id = $1',
+      [req.userId]
+    );
+    
+    res.status(201).json({
+      data: {
+        id: comment.id,
+        content: comment.content,
+        userId: req.userId,
+        userName: userResult.rows[0].username,
+        userDisplayName: userResult.rows[0].display_name,
+        createdAt: comment.created_at
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 獲取留言列表
+app.get('/api/activities/:activityId/comments', requireAuth, async (req, res, next) => {
+  const { activityId } = req.params;
+  
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.content, c.user_id, u.username, u.display_name, c.created_at
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       WHERE c.activity_id = $1
+       ORDER BY c.created_at ASC`,
+      [activityId]
+    );
+    
+    const comments = result.rows.map(row => ({
+      id: row.id,
+      content: row.content,
+      userId: row.user_id,
+      userName: row.username,
+      userDisplayName: row.display_name,
+      createdAt: row.created_at
+    }));
+    
+    res.json({ data: comments });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 刪除留言
+app.delete('/api/comments/:commentId', requireAuth, async (req, res, next) => {
+  const { commentId } = req.params;
+  
+  try {
+    // 檢查留言是否屬於當前用戶
+    const commentCheck = await pool.query(
+      'SELECT user_id FROM comments WHERE id = $1',
+      [commentId]
+    );
+    
+    if (commentCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found.' });
+    }
+    
+    if (commentCheck.rows[0].user_id !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own comments.' });
+    }
+    
+    // 刪除留言
+    await pool.query('DELETE FROM comments WHERE id = $1', [commentId]);
+    
+    res.json({ data: { id: commentId } });
+  } catch (err) {
+    next(err);
   }
 });
 

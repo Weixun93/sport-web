@@ -983,6 +983,71 @@ const api = {
       throw new Error(payload.error || 'Failed to delete account');
     }
     return payload.data;
+  },
+
+  // ========== 點讚API ==========
+  async likeActivity(activityId) {
+    const response = await authorizedFetch(`/api/activities/${encodeURIComponent(activityId)}/like`, {
+      method: 'POST'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to like activity');
+    }
+    return payload.data;
+  },
+
+  async unlikeActivity(activityId) {
+    const response = await authorizedFetch(`/api/activities/${encodeURIComponent(activityId)}/like`, {
+      method: 'DELETE'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to unlike activity');
+    }
+    return payload.data;
+  },
+
+  async getLikeStatus(activityId) {
+    const response = await authorizedFetch(`/api/activities/${encodeURIComponent(activityId)}/likes`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to get like status');
+    }
+    return payload.data;
+  },
+
+  // ========== 留言API ==========
+  async addComment(activityId, content) {
+    const response = await authorizedFetch(`/api/activities/${encodeURIComponent(activityId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to add comment');
+    }
+    return payload.data;
+  },
+
+  async getComments(activityId) {
+    const response = await authorizedFetch(`/api/activities/${encodeURIComponent(activityId)}/comments`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to get comments');
+    }
+    return payload.data;
+  },
+
+  async deleteComment(commentId) {
+    const response = await authorizedFetch(`/api/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to delete comment');
+    }
+    return payload.data;
   }
 };
 
@@ -1058,9 +1123,26 @@ function renderPublicActivities(activities) {
           <button type="button" class="danger small" data-action="delete" data-id="${activity.id}">刪除</button>
         </div>
       ` : ''}
+      <div class="activity-interaction">
+        <button type="button" class="interaction-button like-btn" data-activity-id="${activity.id}" data-action="like">
+          <span class="interaction-count">0</span>
+        </button>
+        <button type="button" class="interaction-button comment-btn" data-activity-id="${activity.id}" data-action="comment">
+          💬 <span class="interaction-count">0</span>
+        </button>
+      </div>
     `;
     publicList.appendChild(item);
   }
+  
+  // 加載點讚和留言信息
+  for (const activity of activities) {
+    loadActivityLikeStatus(activity.id);
+    loadActivityCommentCount(activity.id);
+  }
+  
+  // 為公開活動列表添加事件監聽
+  publicList.addEventListener('click', handleActivityInteraction);
 }
 
 async function refreshActivities() {
@@ -1887,11 +1969,12 @@ function switchPage(pageName) {
   const weatherPage = document.getElementById('weather-page');
   const checkinPage = document.getElementById('checkin-page');
   const communityPage = document.getElementById('community-page');
+  const profilePage = document.getElementById('profile-page');
   const recordsPage = document.getElementById('records-page');
   const pageTabs = document.querySelectorAll('.page-tab');
   
   // 移除所有頁面的 active 類
-  [weatherPage, checkinPage, communityPage, recordsPage].forEach(page => {
+  [weatherPage, checkinPage, communityPage, profilePage, recordsPage].forEach(page => {
     page?.classList.remove('active');
   });
 
@@ -1905,6 +1988,10 @@ function switchPage(pageName) {
       break;
     case 'community':
       communityPage?.classList.add('active');
+      break;
+    case 'profile':
+      profilePage?.classList.add('active');
+      refreshProfilePage();
       break;
     case 'records':
       recordsPage?.classList.add('active');
@@ -2089,6 +2176,325 @@ function handleUsernameInput(event) {
     const result = await checkUsernameAvailability(username);
     updateUsernameInputState(result.available, result.message);
   }, 500); // 500ms 延遲
+}
+
+// ========== 個人頁面功能 ==========
+async function refreshProfilePage() {
+  if (!state.token || !state.user) return;
+  
+  try {
+    // 更新個人資料卡片
+    const profileAvatar = document.querySelector('#profile-avatar');
+    const profileDisplayName = document.querySelector('#profile-display-name');
+    const profileUsername = document.querySelector('#profile-username');
+    const profilePostCount = document.querySelector('#profile-post-count');
+    
+    if (profileAvatar) {
+      profileAvatar.src = '/images/profile img.png';
+      profileAvatar.alt = `${state.user.displayName || state.user.username} avatar`;
+    }
+    
+    if (profileDisplayName) {
+      profileDisplayName.textContent = state.user.displayName || state.user.username;
+    }
+    
+    if (profileUsername) {
+      profileUsername.textContent = `@${state.user.username}`;
+    }
+    
+    // 刷新個人發布的活動
+    const profileActivityList = document.querySelector('#profile-activity-list');
+    if (profileActivityList) {
+      // 使用已加載的 state.activities
+      const userActivities = state.activities || [];
+      
+      if (profilePostCount) {
+        profilePostCount.textContent = userActivities.length;
+      }
+      
+      renderProfileActivities(userActivities);
+    }
+  } catch (err) {
+    console.error('Error refreshing profile page:', err);
+  }
+}
+
+function renderProfileActivities(activities) {
+  const profileActivityList = document.querySelector('#profile-activity-list');
+  if (!profileActivityList) return;
+  
+  profileActivityList.innerHTML = '';
+  
+  if (!activities.length) {
+    profileActivityList.innerHTML = '<li class="empty-state">還沒有發布任何運動記錄，開始記錄你的運動吧！</li>';
+    return;
+  }
+  
+  // 按時間倒序排列（最新的優先）
+  const sortedActivities = [...activities].sort((a, b) => {
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  
+  for (const activity of sortedActivities) {
+    const item = document.createElement('li');
+    const isPublic = Boolean(activity.isPublic);
+    item.innerHTML = `
+      ${
+        activity.photoUrl
+          ? `<img class="activity-photo" src="${activity.photoUrl}" alt="${activity.sport} photo" loading="lazy" />`
+          : ''
+      }
+      <div class="activity-header">
+        <span>${activity.date}</span>
+        <span>時間：${activity.durationMinutes} 分鐘</span>
+      </div>
+      <div class="activity-meta">
+        <span>${activity.sport}</span>
+        <span>強度：${activity.intensity}</span>
+      </div>
+      <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
+      ${activity.notes ? `<p class="activity-notes">${activity.notes}</p>` : ''}
+      <div class="activity-actions">
+        <button type="button" class="secondary small" data-action="edit" data-id="${activity.id}">編輯</button>
+        <button type="button" class="danger small" data-action="delete" data-id="${activity.id}">刪除</button>
+      </div>
+      <div class="activity-interaction">
+        <button type="button" class="interaction-button like-btn" data-activity-id="${activity.id}" data-action="like">
+          <span class="interaction-count">0</span>
+        </button>
+        <button type="button" class="interaction-button comment-btn" data-activity-id="${activity.id}" data-action="comment">
+          💬 <span class="interaction-count">0</span>
+        </button>
+      </div>
+    `;
+    profileActivityList.appendChild(item);
+  }
+  
+  // 加載點讚和留言信息
+  for (const activity of activities) {
+    loadActivityLikeStatus(activity.id);
+    loadActivityCommentCount(activity.id);
+  }
+  
+  // 為個人頁面的活動列表添加事件監聽
+  profileActivityList.addEventListener('click', handleActivityInteraction);
+}
+
+// ========== 點讚和留言功能 ==========
+async function loadActivityLikeStatus(activityId) {
+  try {
+    const likeData = await api.getLikeStatus(activityId);
+    const likeBtn = document.querySelector(`.like-btn[data-activity-id="${activityId}"]`);
+    
+    if (likeBtn) {
+      const countSpan = likeBtn.querySelector('.interaction-count');
+      countSpan.textContent = likeData.likeCount;
+      
+      if (likeData.userLiked) {
+        likeBtn.classList.add('liked');
+      } else {
+        likeBtn.classList.remove('liked');
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load like status:', err);
+  }
+}
+
+async function loadActivityCommentCount(activityId) {
+  try {
+    const comments = await api.getComments(activityId);
+    const commentBtn = document.querySelector(`.comment-btn[data-activity-id="${activityId}"]`);
+    
+    if (commentBtn) {
+      const countSpan = commentBtn.querySelector('.interaction-count');
+      countSpan.textContent = comments.length;
+    }
+  } catch (err) {
+    console.error('Failed to load comment count:', err);
+  }
+}
+
+async function handleActivityInteraction(event) {
+  const likeBtn = event.target.closest('.like-btn');
+  const commentBtn = event.target.closest('.comment-btn');
+  
+  if (likeBtn) {
+    event.preventDefault();
+    const activityId = likeBtn.dataset.activityId;
+    const isLiked = likeBtn.classList.contains('liked');
+    
+    try {
+      if (isLiked) {
+        // 取消按讚
+        await api.unlikeActivity(activityId);
+        likeBtn.classList.remove('liked');
+      } else {
+        // 按讚
+        await api.likeActivity(activityId);
+        likeBtn.classList.add('liked');
+      }
+      
+      // 更新按讚數
+      await loadActivityLikeStatus(activityId);
+    } catch (err) {
+      console.error('Like error:', err);
+      alert(err.message || '操作失敗，請稍後再試');
+    }
+  }
+  
+  if (commentBtn) {
+    event.preventDefault();
+    const activityId = commentBtn.dataset.activityId;
+    showCommentsModal(activityId);
+  }
+}
+
+// ========== 留言對話框 ==========
+const commentsModal = document.querySelector('#comments-modal');
+const commentsModalClose = document.querySelector('#comments-modal-close');
+const addCommentForm = document.querySelector('#add-comment-form');
+const commentInput = document.querySelector('#comment-input');
+const commentMessage = document.querySelector('#comment-message');
+const commentsList = document.querySelector('#comments-list');
+const commentCancel = document.querySelector('#comment-cancel');
+
+let currentActivityIdForComments = null;
+
+function showCommentsModal(activityId) {
+  currentActivityIdForComments = activityId;
+  commentsModal.removeAttribute('hidden');
+  commentInput.value = '';
+  setMessage(commentMessage, '', null);
+  addCommentForm.reset();
+  
+  // 加載留言
+  loadComments(activityId);
+}
+
+function hideCommentsModal() {
+  commentsModal.setAttribute('hidden', 'true');
+  currentActivityIdForComments = null;
+}
+
+async function loadComments(activityId) {
+  try {
+    const comments = await api.getComments(activityId);
+    renderComments(comments);
+  } catch (err) {
+    console.error('Failed to load comments:', err);
+    commentsList.innerHTML = '<li class="comments-empty">無法加載留言</li>';
+  }
+}
+
+function renderComments(comments) {
+  commentsList.innerHTML = '';
+  
+  if (!comments.length) {
+    commentsList.innerHTML = '<li class="comments-empty">還沒有留言，成為第一個留言的吧！</li>';
+    return;
+  }
+  
+  for (const comment of comments) {
+    const item = document.createElement('li');
+    item.className = 'comment-item';
+    
+    const isOwner = comment.userId === state.user?.id;
+    const deleteBtn = isOwner ? `<button type="button" class="comment-delete-btn" data-comment-id="${comment.id}" data-action="delete-comment">刪除</button>` : '';
+    
+    const createdDate = new Date(comment.createdAt);
+    const timeStr = createdDate.toLocaleString('zh-TW');
+    
+    item.innerHTML = `
+      <div class="comment-header">
+        <span class="comment-author">${comment.userDisplayName || comment.userName}</span>
+        <span class="comment-time">${timeStr}</span>
+        ${deleteBtn}
+      </div>
+      <p class="comment-content">${escapeHtml(comment.content)}</p>
+    `;
+    
+    commentsList.appendChild(item);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function handleAddComment(event) {
+  event.preventDefault();
+  
+  if (!currentActivityIdForComments) return;
+  
+  const content = commentInput.value.trim();
+  if (!content) {
+    setMessage(commentMessage, '請輸入留言內容', 'error');
+    return;
+  }
+  
+  try {
+    setMessage(commentMessage, '正在發送...' , null);
+    await api.addComment(currentActivityIdForComments, content);
+    
+    // 重新加載留言
+    await loadComments(currentActivityIdForComments);
+    
+    // 更新留言數
+    await loadActivityCommentCount(currentActivityIdForComments);
+    
+    commentInput.value = '';
+    setMessage(commentMessage, '', null);
+  } catch (err) {
+    console.error('Add comment error:', err);
+    setMessage(commentMessage, err.message || '發送失敗，請稍後再試', 'error');
+  }
+}
+
+async function handleDeleteComment(commentId) {
+  if (!confirm('確定要刪除這條留言嗎？')) return;
+  
+  try {
+    setMessage(commentMessage, '正在刪除...', null);
+    await api.deleteComment(commentId);
+    
+    // 重新加載留言
+    if (currentActivityIdForComments) {
+      await loadComments(currentActivityIdForComments);
+      await loadActivityCommentCount(currentActivityIdForComments);
+    }
+    
+    setMessage(commentMessage, '', null);
+  } catch (err) {
+    console.error('Delete comment error:', err);
+    setMessage(commentMessage, err.message || '刪除失敗，請稍後再試', 'error');
+  }
+}
+
+// 留言對話框事件監聽
+if (commentsModalClose) {
+  commentsModalClose.addEventListener('click', hideCommentsModal);
+}
+
+if (commentCancel) {
+  commentCancel.addEventListener('click', hideCommentsModal);
+}
+
+if (addCommentForm) {
+  addCommentForm.addEventListener('submit', handleAddComment);
+}
+
+if (commentsList) {
+  commentsList.addEventListener('click', (event) => {
+    const deleteBtn = event.target.closest('[data-action="delete-comment"]');
+    if (deleteBtn) {
+      event.preventDefault();
+      const commentId = deleteBtn.dataset.commentId;
+      handleDeleteComment(commentId);
+    }
+  });
 }
 function showChangePasswordModal() {
   if (changePasswordModal) {
