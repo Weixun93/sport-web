@@ -948,8 +948,12 @@ const api = {
     return payload.data ?? [];
   },
 
-  async getWeather() {
-    const response = await authorizedFetch('/api/weather');
+  async getWeather(userLocation = null) {
+    let url = '/api/weather';
+    if (userLocation && userLocation.lat && userLocation.lon) {
+      url += `?lat=${userLocation.lat}&lon=${userLocation.lon}`;
+    }
+    const response = await authorizedFetch(url);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || 'Failed to load weather');
@@ -1109,7 +1113,30 @@ async function refreshWeather() {
   if (!state.token) return;
   try {
     setWeatherLoading();
-    const weather = await api.getWeather();
+    
+    // 嘗試取得使用者位置
+    let userLocation = null;
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 5000,
+            maximumAge: 300000, // 快取 5 分鐘
+            enableHighAccuracy: false
+          });
+        });
+        userLocation = {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        };
+        console.log('📍 User location obtained:', userLocation);
+      } catch (geoError) {
+        console.log('⚠️ Could not get user location:', geoError.message);
+        // 繼續執行，使用預設位置
+      }
+    }
+    
+    const weather = await api.getWeather(userLocation);
     state.weather = weather;
     renderWeather(weather);
   } catch (err) {

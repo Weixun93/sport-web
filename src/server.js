@@ -4,11 +4,13 @@ const path = require('path');
 const express = require('express');
 const morgan = require('morgan');
 const multer = require('multer');
+const axios = require('axios');
 
 require('dotenv').config();
 
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
+const { env } = require('process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -187,8 +189,153 @@ const parseBooleanFlag = (value, fallback = false) => {
   return fallback;
 };
 
+// 台灣主要氣象站座標資料（經緯度）
+const weatherStations = [
+  { name: '基隆', lat: 25.133314, lon: 121.740475 },
+  { name: '臺北', lat: 25.037658, lon: 121.514853 },
+  { name: '新北', lat: 24.959207, lon: 121.525196 },
+  { name: '桃園', lat: 24.992425, lon: 121.323172 },
+  { name: '新竹', lat: 24.827853, lon: 121.014219 },
+  { name: '臺中', lat: 24.145736, lon: 120.684075 },
+  // TODO
+];
+
+// 計算兩點之間的距離（使用 Haversine 公式，單位：公里）
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // 地球半徑（公里）
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// 根據使用者座標找到最近的氣象站
+function findNearestStation(userLat, userLon) {
+  let nearestStation = weatherStations[0];
+  let minDistance = calculateDistance(userLat, userLon, nearestStation.lat, nearestStation.lon);
+  
+  for (let i = 1; i < weatherStations.length; i++) {
+    const station = weatherStations[i];
+    const distance = calculateDistance(userLat, userLon, station.lat, station.lon);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearestStation = station;
+    }
+  }
+  
+  console.log(`🎯 Nearest station: ${nearestStation.name} (${minDistance.toFixed(2)} km away)`);
+  return nearestStation.name;
+}
+
 async function fetchWeatherForUser(_context) {
-  return null;
+  // 如果有提供使用者座標，則使用最近的觀測站；否則使用預設值
+  let location = "台北";  // 預設測站名稱
+  
+  if (_context && _context.userLat && _context.userLon) {
+    location = findNearestStation(_context.userLat, _context.userLon);
+    console.log(`📍 Using nearest station based on user location: ${location}`);
+  } else {
+    console.log(`📍 Using default station: ${location}`);
+  }
+  const token = env.WEATHER_API_TOKEN || '';
+  
+  // 如果沒有 token，返回預設資料
+  if (!token) {
+    console.log('⚠️ No WEATHER_API_TOKEN found, returning mock data');
+    return {
+      location: '基隆',
+      condition: '晴天',
+      temperatureC: 25,
+      humidity: 0.65,
+      windKph: 10,
+      summary: '晴天 25°C',
+      lastUpdated: new Date().toISOString()
+    };
+  }
+  
+  // 使用自動氣象站觀測資料 API
+  const url = 'https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001';
+  const config = {
+    headers: {
+      'Authorization': token,
+    },
+    params: {
+      StationName: location,  // 使用測站名稱作為參數
+    }
+  };
+
+  try {
+    const response = await axios.get(url, config);
+    const records = response.data?.records;
+    
+    if (!records || !records.Station || !records.Station.length) {
+      console.log('⚠️ No weather data found in API response');
+      return null;
+    }
+
+    // 取得第一個測站的資料
+    const station = records.Station[0];
+    const stationName = station.StationName || location;
+    const weatherElement = station.WeatherElement;
+    
+    if (!weatherElement) {
+      console.log('⚠️ No WeatherElement found');
+      return null;
+    }
+
+    // 解析各項氣象資料
+    const temperature = weatherElement.AirTemperature 
+      ? parseFloat(weatherElement.AirTemperature) 
+      : null;
+    
+    const humidity = weatherElement.RelativeHumidity 
+      ? parseFloat(weatherElement.RelativeHumidity) / 100  // 轉換為 0-1 的小數
+      : null;
+    
+    const windSpeed = weatherElement.WindSpeed 
+      ? parseFloat(weatherElement.WindSpeed) 
+      : null;
+    
+    const weather = weatherElement.Weather || '無資料';
+    console.log('Raw weather condition:', weather);
+    console.log(typeof weather);
+    // if (weather === '-99') {
+    //   weather = '儀器故障';
+    // }
+    
+    const weatherData = {
+      location: stationName,
+      condition: weather,
+      temperatureC: temperature,
+      humidity: humidity,
+      windKph: windSpeed,
+      summary: `${weather} ${temperature !== null ? temperature + '°C' : ''}`,
+      lastUpdated: station.ObsTime?.DateTime || new Date().toISOString(),
+      raw: records  // 保留完整原始資料供 debug
+    };
+    
+    console.log('✅ Weather data fetched successfully:', weatherData);
+    return weatherData;
+    
+  } catch (error) {
+    console.error(`❌ Error fetching weather data: ${error.message}`);
+    console.error('Error details:', error.response?.data || error);
+    
+    // 返回預設資料而非 null
+    return {
+      location: location,
+      condition: '無法取得天氣資料',
+      temperatureC: null,
+      humidity: null,
+      windKph: null,
+      summary: '無法取得天氣資料',
+      lastUpdated: new Date().toISOString()
+    };
+  }
 }
 
 // *** 認證端點 ***
@@ -356,7 +503,22 @@ app.get('/api/activities/public', requireAuth, async (req, res, next) => {
 
 app.get('/api/weather', requireAuth, async (req, res, next) => {
   try {
-    const weather = await fetchWeatherForUser({ userId: req.userId });
+    // 從查詢參數取得使用者座標
+    const { lat, lon } = req.query;
+    const context = { userId: req.userId };
+    
+    // 如果提供了座標，加入 context
+    if (lat && lon) {
+      const userLat = parseFloat(lat);
+      const userLon = parseFloat(lon);
+      if (!isNaN(userLat) && !isNaN(userLon)) {
+        context.userLat = userLat;
+        context.userLon = userLon;
+        console.log(`📍 Received user location: ${userLat}, ${userLon}`);
+      }
+    }
+    
+    const weather = await fetchWeatherForUser(context);
     if (weather) {
       return res.json({ data: weather });
     }
