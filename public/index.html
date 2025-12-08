@@ -119,8 +119,7 @@
           <button type="button" class="page-tab active" data-page="weather">天氣</button>
           <button type="button" class="page-tab" data-page="checkin">打卡</button>
           <button type="button" class="page-tab" data-page="community">動態</button>
-          <button type="button" class="page-tab" data-page="profile">個人</button>
-          <button type="button" class="page-tab" data-page="records">紀錄</button>
+          <button type="button" class="page-tab" data-page="records">個人</button>
         </div>
       </div>
     </div>    <main class="page-main auth-view" id="app-main" hidden>
@@ -193,28 +192,61 @@
       </div>
       <!-- 結束社群頁面 -->
 
-      <div id="profile-page" class="page-content">
+
+
+      <div id="records-page" class="page-content">
         <!-- 個人頁面內容 -->
-        <section class="card full-width profile-header-card">
-          <div class="profile-header">
-            <div class="profile-avatar-container">
-              <img src="" alt="個人頭像" id="profile-avatar" class="profile-avatar" />
+        
+        <!-- 運動目標卡片 -->
+        <section class="card full-width" id="goals-card">
+          <div class="goals-header">
+            <h2>🎯 我的運動目標</h2>
+            <button type="button" id="set-goals-btn" class="secondary small">設定目標</button>
+          </div>
+          
+          <div class="goals-container">
+            <!-- 週目標 -->
+            <div class="goal-item">
+              <div class="goal-title">
+                <span class="goal-icon">📅</span>
+                <span>本週目標</span>
+              </div>
+              <div class="goal-progress">
+                <div class="goal-progress-bar">
+                  <div class="goal-progress-fill" id="weekly-progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="goal-stats">
+                  <span id="weekly-current">0</span> / <span id="weekly-target">0</span> 次
+                </div>
+              </div>
+              <div class="goal-badge" id="weekly-badge" hidden>
+                <span class="badge-icon">💪</span>
+                <span class="badge-text">本週目標達成！</span>
+              </div>
             </div>
-            <div class="profile-info">
-              <h2 id="profile-display-name">用戶名稱</h2>
-              <p id="profile-username" class="profile-username">@username</p>
-              <p id="profile-stats" class="profile-stats">發布 <span id="profile-post-count">0</span> 篇文章</p>
+            
+            <!-- 月目標 -->
+            <div class="goal-item">
+              <div class="goal-title">
+                <span class="goal-icon">📆</span>
+                <span>本月目標</span>
+              </div>
+              <div class="goal-progress">
+                <div class="goal-progress-bar">
+                  <div class="goal-progress-fill" id="monthly-progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="goal-stats">
+                  <span id="monthly-current">0</span> / <span id="monthly-target">0</span> 次
+                </div>
+              </div>
+              <div class="goal-badge" id="monthly-badge" hidden>
+                <span class="badge-icon">🏅</span>
+                <span class="badge-text">本月目標達成！</span>
+              </div>
             </div>
           </div>
         </section>
-        <section class="card full-width">
-          <ul id="profile-activity-list" class="activity-list"></ul>
-        </section>
-      </div>
-      <!-- 結束個人頁面 -->
-
-      <div id="records-page" class="page-content">
-        <!-- 紀錄頁面內容 -->
+        
         <section class="card full-width" id="activity-list-card">
           <h2>您的活動歷史</h2>
           <ul id="activity-list" class="activity-list"></ul>
@@ -441,6 +473,33 @@
             <ul id="comments-list" class="comments-list"></ul>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 設定目標對話框 -->
+    <div id="set-goals-modal" class="modal" hidden>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>設定運動目標</h3>
+          <button type="button" class="modal-close" id="set-goals-close">✕</button>
+        </div>
+        <form id="set-goals-form" class="modal-form">
+          <div class="form-field">
+            <label for="weekly-goal-input">週目標（次數）</label>
+            <input id="weekly-goal-input" name="weeklyGoal" type="number" min="3" max="50" placeholder="例如：3" required />
+            <small>最少 3 次，建議每週運動 3-5 次</small>
+          </div>
+          <div class="form-field">
+            <label for="monthly-goal-input">月目標（次數）</label>
+            <input id="monthly-goal-input" name="monthlyGoal" type="number" min="12" max="200" placeholder="例如：12" required />
+            <small>最少 12 次，建議每月運動 12-20 次</small>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="primary">保存目標</button>
+            <button type="button" class="secondary" id="set-goals-cancel">取消</button>
+          </div>
+          <p id="set-goals-message" class="form-message"></p>
+        </form>
       </div>
     </div>
 

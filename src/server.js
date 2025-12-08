@@ -113,6 +113,19 @@ async function initializeDatabase() {
       );
     `);
 
+    // 建立 goals 資料表 (用於儲存運動目標)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS goals (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        weekly_goal INTEGER DEFAULT 3,
+        monthly_goal INTEGER DEFAULT 12,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id)
+      );
+    `);
+
     console.log('Database tables checked/created successfully.');
 
     // *** NEW: 插入範例使用者 (如果他不存在)，並使用 bcrypt 加密密碼 ***
@@ -507,6 +520,53 @@ app.get('/api/activities/public', requireAuth, async (req, res, next) => {
        ORDER BY a.created_at DESC`
     );
     
+    // 獲取所有活動擁有者的目標達成狀態
+    const ownerIds = [...new Set(result.rows.map(row => row.owner_id))];
+    const goalsAchievements = {};
+    
+    for (const ownerId of ownerIds) {
+      // 獲取用戶目標
+      const goalsResult = await pool.query(
+        'SELECT weekly_goal, monthly_goal FROM goals WHERE user_id = $1',
+        [ownerId]
+      );
+      
+      const weeklyGoal = goalsResult.rows[0]?.weekly_goal || 3;
+      const monthlyGoal = goalsResult.rows[0]?.monthly_goal || 12;
+      
+      // 計算本週和本月的運動次數
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() + diffToMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const weekResult = await pool.query(
+        'SELECT COUNT(*) as count FROM activities WHERE owner_id = $1 AND date >= $2',
+        [ownerId, weekStart.toISOString().split('T')[0]]
+      );
+      
+      const monthResult = await pool.query(
+        'SELECT COUNT(*) as count FROM activities WHERE owner_id = $1 AND date >= $2',
+        [ownerId, monthStart.toISOString().split('T')[0]]
+      );
+      
+      const weeklyCount = parseInt(weekResult.rows[0].count);
+      const monthlyCount = parseInt(monthResult.rows[0].count);
+      
+      goalsAchievements[ownerId] = {
+        weeklyGoal,
+        monthlyGoal,
+        weeklyCount,
+        monthlyCount,
+        hasWeeklyGoal: weeklyCount >= weeklyGoal,
+        hasMonthlyGoal: monthlyCount >= monthlyGoal
+      };
+    }
+    
     const feed = result.rows.map((activity) => ({
       ...activity,
       date: activity.date_str,
@@ -515,7 +575,8 @@ app.get('/api/activities/public', requireAuth, async (req, res, next) => {
       isPublic: true,
       ownerId: activity.owner_id,
       ownerName: activity.owner_name,
-      isOwner: activity.owner_id === req.userId
+      isOwner: activity.owner_id === req.userId,
+      ownerGoals: goalsAchievements[activity.owner_id] || null
     }));
 
     res.json({ data: feed });
@@ -1010,6 +1071,115 @@ app.delete('/api/comments/:commentId', requireAuth, async (req, res, next) => {
     await pool.query('DELETE FROM comments WHERE id = $1', [commentId]);
     
     res.json({ data: { id: commentId } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// *** 運動目標 API ***
+// 獲取使用者的運動目標
+app.get('/api/goals', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'SELECT weekly_goal, monthly_goal FROM goals WHERE user_id = $1',
+      [req.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      // 如果用戶還沒有設定目標，返回預設值
+      return res.json({
+        data: {
+          weeklyGoal: 3,
+          monthlyGoal: 12,
+          isSet: false
+        }
+      });
+    }
+    
+    res.json({
+      data: {
+        weeklyGoal: result.rows[0].weekly_goal,
+        monthlyGoal: result.rows[0].monthly_goal,
+        isSet: true
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 設定或更新使用者的運動目標
+app.post('/api/goals', requireAuth, async (req, res, next) => {
+  const { weeklyGoal, monthlyGoal } = req.body;
+  
+  if (!weeklyGoal || !monthlyGoal) {
+    return res.status(400).json({ error: 'Weekly and monthly goals are required.' });
+  }
+  
+  // 週目標最少 3 次，最多 50 次
+  // 月目標最少 12 次，最多 200 次
+  if (weeklyGoal < 3 || weeklyGoal > 50) {
+    return res.status(400).json({ error: '週目標需在 3-50 次之間' });
+  }
+  
+  if (monthlyGoal < 12 || monthlyGoal > 200) {
+    return res.status(400).json({ error: '月目標需在 12-200 次之間' });
+  }
+  
+  try {
+    // 使用 UPSERT (ON CONFLICT) 來插入或更新
+    await pool.query(
+      `INSERT INTO goals (id, user_id, weekly_goal, monthly_goal, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET weekly_goal = $3, monthly_goal = $4, updated_at = NOW()`,
+      [`goal-${req.userId}`, req.userId, weeklyGoal, monthlyGoal]
+    );
+    
+    res.json({
+      data: {
+        weeklyGoal,
+        monthlyGoal,
+        message: 'Goals updated successfully.'
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 獲取本週和本月的運動次數
+app.get('/api/goals/progress', requireAuth, async (req, res, next) => {
+  try {
+    // 獲取本週的開始日期（週一）
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() + diffToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    // 獲取本月的開始日期
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // 查詢本週的運動次數
+    const weekResult = await pool.query(
+      'SELECT COUNT(*) as count FROM activities WHERE owner_id = $1 AND date >= $2',
+      [req.userId, weekStart.toISOString().split('T')[0]]
+    );
+    
+    // 查詢本月的運動次數
+    const monthResult = await pool.query(
+      'SELECT COUNT(*) as count FROM activities WHERE owner_id = $1 AND date >= $2',
+      [req.userId, monthStart.toISOString().split('T')[0]]
+    );
+    
+    res.json({
+      data: {
+        weeklyCount: parseInt(weekResult.rows[0].count),
+        monthlyCount: parseInt(monthResult.rows[0].count)
+      }
+    });
   } catch (err) {
     next(err);
   }

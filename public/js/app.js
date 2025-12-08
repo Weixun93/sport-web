@@ -799,6 +799,12 @@ function applyAuthView() {
   if (!isAuthenticated) {
     setWeatherPlaceholder();
     resetCalendarView();
+  } else {
+    // 登入後刷新數據
+    refreshActivities();
+    refreshPublicActivities();
+    refreshWeather();
+    refreshGoals(); // 刷新目標數據
   }
 }
 
@@ -1048,6 +1054,37 @@ const api = {
       throw new Error(payload.error || 'Failed to delete comment');
     }
     return payload.data;
+  },
+
+  // ========== 運動目標 API ==========
+  async getGoals() {
+    const response = await authorizedFetch('/api/goals');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to get goals');
+    }
+    return payload.data;
+  },
+
+  async setGoals(weeklyGoal, monthlyGoal) {
+    const response = await authorizedFetch('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({ weeklyGoal, monthlyGoal })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to set goals');
+    }
+    return payload.data;
+  },
+
+  async getGoalsProgress() {
+    const response = await authorizedFetch('/api/goals/progress');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to get goals progress');
+    }
+    return payload.data;
   }
 };
 
@@ -1100,6 +1137,22 @@ function renderPublicActivities(activities) {
     const isPublic = Boolean(activity.isPublic);
     const ownerName = activity.ownerName || 'Anonymous';
     const isOwner = activity.isOwner; // 檢查是否為所有者
+    
+    // 檢查用戶是否達成目標 - 使用後端返回的 ownerGoals 數據
+    let achievementBadge = '';
+    if (activity.ownerGoals) {
+      const hasWeeklyGoal = activity.ownerGoals.hasWeeklyGoal;
+      const hasMonthlyGoal = activity.ownerGoals.hasMonthlyGoal;
+      
+      if (hasWeeklyGoal && hasMonthlyGoal) {
+        achievementBadge = '<span class="achievement-badge double">💪🏅</span>';
+      } else if (hasWeeklyGoal) {
+        achievementBadge = '<span class="achievement-badge weekly">💪</span>';
+      } else if (hasMonthlyGoal) {
+        achievementBadge = '<span class="achievement-badge monthly">🏅</span>';
+      }
+    }
+    
     item.innerHTML = `
       ${
         activity.photoUrl
@@ -1115,7 +1168,7 @@ function renderPublicActivities(activities) {
         <span>強度：${activity.intensity}</span>
       </div>
       <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
-      <p class="activity-owner">分享者：${ownerName}</p>
+      <p class="activity-owner">分享者：${ownerName} ${achievementBadge}</p>
       ${activity.notes ? `<p class="activity-notes">${activity.notes}</p>` : ''}
       ${isOwner ? `
         <div class="activity-actions">
@@ -1272,7 +1325,7 @@ async function handleActivityListClick(event) {
         resetActivityForm();
       }
       setMessage(activityMessage, 'Activity deleted.', 'success');
-      await Promise.all([refreshActivities(), refreshPublicActivities()]);
+      await Promise.all([refreshActivities(), refreshPublicActivities(), refreshGoals()]);
     } catch (err) {
       if (err.message === 'Unauthorized') return;
       console.error(err);
@@ -1934,7 +1987,7 @@ async function handleActivitySubmit(form, messageElement) {
     resetActivityForm({ keepMessage: true });
     console.log('✅ After reset, editingActivityId:', state.editingActivityId);
     
-    await Promise.all([refreshActivities(), refreshPublicActivities()]);
+    await Promise.all([refreshActivities(), refreshPublicActivities(), refreshGoals()]);
     
     // 關閉浮動表單
     const floatingModal = document.getElementById('floating-form-modal');
@@ -1969,12 +2022,11 @@ function switchPage(pageName) {
   const weatherPage = document.getElementById('weather-page');
   const checkinPage = document.getElementById('checkin-page');
   const communityPage = document.getElementById('community-page');
-  const profilePage = document.getElementById('profile-page');
   const recordsPage = document.getElementById('records-page');
   const pageTabs = document.querySelectorAll('.page-tab');
   
   // 移除所有頁面的 active 類
-  [weatherPage, checkinPage, communityPage, profilePage, recordsPage].forEach(page => {
+  [weatherPage, checkinPage, communityPage, recordsPage].forEach(page => {
     page?.classList.remove('active');
   });
 
@@ -1989,12 +2041,10 @@ function switchPage(pageName) {
     case 'community':
       communityPage?.classList.add('active');
       break;
-    case 'profile':
-      profilePage?.classList.add('active');
-      refreshProfilePage();
-      break;
     case 'records':
       recordsPage?.classList.add('active');
+      // 切換到個人頁面時刷新目標
+      refreshGoals();
       break;
   }
   
@@ -2176,108 +2226,6 @@ function handleUsernameInput(event) {
     const result = await checkUsernameAvailability(username);
     updateUsernameInputState(result.available, result.message);
   }, 500); // 500ms 延遲
-}
-
-// ========== 個人頁面功能 ==========
-async function refreshProfilePage() {
-  if (!state.token || !state.user) return;
-  
-  try {
-    // 更新個人資料卡片
-    const profileAvatar = document.querySelector('#profile-avatar');
-    const profileDisplayName = document.querySelector('#profile-display-name');
-    const profileUsername = document.querySelector('#profile-username');
-    const profilePostCount = document.querySelector('#profile-post-count');
-    
-    if (profileAvatar) {
-      profileAvatar.src = '/images/profile img.png';
-      profileAvatar.alt = `${state.user.displayName || state.user.username} avatar`;
-    }
-    
-    if (profileDisplayName) {
-      profileDisplayName.textContent = state.user.displayName || state.user.username;
-    }
-    
-    if (profileUsername) {
-      profileUsername.textContent = `@${state.user.username}`;
-    }
-    
-    // 刷新個人發布的活動
-    const profileActivityList = document.querySelector('#profile-activity-list');
-    if (profileActivityList) {
-      // 使用已加載的 state.activities
-      const userActivities = state.activities || [];
-      
-      if (profilePostCount) {
-        profilePostCount.textContent = userActivities.length;
-      }
-      
-      renderProfileActivities(userActivities);
-    }
-  } catch (err) {
-    console.error('Error refreshing profile page:', err);
-  }
-}
-
-function renderProfileActivities(activities) {
-  const profileActivityList = document.querySelector('#profile-activity-list');
-  if (!profileActivityList) return;
-  
-  profileActivityList.innerHTML = '';
-  
-  if (!activities.length) {
-    profileActivityList.innerHTML = '<li class="empty-state">還沒有發布任何運動記錄，開始記錄你的運動吧！</li>';
-    return;
-  }
-  
-  // 按時間倒序排列（最新的優先）
-  const sortedActivities = [...activities].sort((a, b) => {
-    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-  });
-  
-  for (const activity of sortedActivities) {
-    const item = document.createElement('li');
-    const isPublic = Boolean(activity.isPublic);
-    item.innerHTML = `
-      ${
-        activity.photoUrl
-          ? `<img class="activity-photo" src="${activity.photoUrl}" alt="${activity.sport} photo" loading="lazy" />`
-          : ''
-      }
-      <div class="activity-header">
-        <span>${activity.date}</span>
-        <span>時間：${activity.durationMinutes} 分鐘</span>
-      </div>
-      <div class="activity-meta">
-        <span>${activity.sport}</span>
-        <span>強度：${activity.intensity}</span>
-      </div>
-      <span class="sharing-tag ${isPublic ? 'public' : 'private'}">${isPublic ? '公開' : '私人'}</span>
-      ${activity.notes ? `<p class="activity-notes">${activity.notes}</p>` : ''}
-      <div class="activity-actions">
-        <button type="button" class="secondary small" data-action="edit" data-id="${activity.id}">編輯</button>
-        <button type="button" class="danger small" data-action="delete" data-id="${activity.id}">刪除</button>
-      </div>
-      <div class="activity-interaction">
-        <button type="button" class="interaction-button like-btn" data-activity-id="${activity.id}" data-action="like">
-          <span class="interaction-count">0</span>
-        </button>
-        <button type="button" class="interaction-button comment-btn" data-activity-id="${activity.id}" data-action="comment">
-          💬 <span class="interaction-count">0</span>
-        </button>
-      </div>
-    `;
-    profileActivityList.appendChild(item);
-  }
-  
-  // 加載點讚和留言信息
-  for (const activity of activities) {
-    loadActivityLikeStatus(activity.id);
-    loadActivityCommentCount(activity.id);
-  }
-  
-  // 為個人頁面的活動列表添加事件監聽
-  profileActivityList.addEventListener('click', handleActivityInteraction);
 }
 
 // ========== 點讚和留言功能 ==========
@@ -2622,4 +2570,153 @@ if (changePasswordForm) {
 if (deleteAccountForm) {
   deleteAccountForm.addEventListener('submit', handleDeleteAccount);
 }
+
+// ========== 運動目標功能 ==========
+const setGoalsBtn = document.querySelector('#set-goals-btn');
+const setGoalsModal = document.querySelector('#set-goals-modal');
+const setGoalsClose = document.querySelector('#set-goals-close');
+const setGoalsCancel = document.querySelector('#set-goals-cancel');
+const setGoalsForm = document.querySelector('#set-goals-form');
+const setGoalsMessage = document.querySelector('#set-goals-message');
+const weeklyGoalInput = document.querySelector('#weekly-goal-input');
+const monthlyGoalInput = document.querySelector('#monthly-goal-input');
+
+// 目標進度元素
+const weeklyProgressFill = document.querySelector('#weekly-progress-fill');
+const monthlyProgressFill = document.querySelector('#monthly-progress-fill');
+const weeklyCurrent = document.querySelector('#weekly-current');
+const weeklyTarget = document.querySelector('#weekly-target');
+const monthlyCurrent = document.querySelector('#monthly-current');
+const monthlyTarget = document.querySelector('#monthly-target');
+const weeklyBadge = document.querySelector('#weekly-badge');
+const monthlyBadge = document.querySelector('#monthly-badge');
+
+let userGoals = {
+  weeklyGoal: 3,
+  monthlyGoal: 12,
+  weeklyCount: 0,
+  monthlyCount: 0
+};
+
+// 顯示設定目標對話框
+function showSetGoalsModal() {
+  if (!setGoalsModal) return;
+  setGoalsModal.hidden = false;
+  
+  // 預填當前目標
+  if (weeklyGoalInput) weeklyGoalInput.value = userGoals.weeklyGoal;
+  if (monthlyGoalInput) monthlyGoalInput.value = userGoals.monthlyGoal;
+  if (setGoalsMessage) setGoalsMessage.textContent = '';
+}
+
+// 隱藏設定目標對話框
+function hideSetGoalsModal() {
+  if (!setGoalsModal) return;
+  setGoalsModal.hidden = true;
+  if (setGoalsForm) setGoalsForm.reset();
+  if (setGoalsMessage) setGoalsMessage.textContent = '';
+}
+
+// 處理設定目標表單提交
+async function handleSetGoals(event) {
+  event.preventDefault();
+  
+  const weeklyGoal = parseInt(weeklyGoalInput.value);
+  const monthlyGoal = parseInt(monthlyGoalInput.value);
+  
+  if (weeklyGoal < 3 || weeklyGoal > 50) {
+    setMessage(setGoalsMessage, '週目標需在 3-50 次之間', 'error');
+    return;
+  }
+  
+  if (monthlyGoal < 12 || monthlyGoal > 200) {
+    setMessage(setGoalsMessage, '月目標需在 12-200 次之間', 'error');
+    return;
+  }
+  
+  try {
+    await api.setGoals(weeklyGoal, monthlyGoal);
+    userGoals.weeklyGoal = weeklyGoal;
+    userGoals.monthlyGoal = monthlyGoal;
+    
+    // 更新顯示
+    updateGoalsDisplay();
+    
+    setMessage(setGoalsMessage, '目標設定成功！', 'success');
+    setTimeout(hideSetGoalsModal, 1500);
+  } catch (err) {
+    console.error('Error setting goals:', err);
+    setMessage(setGoalsMessage, err.message || '設定目標失敗', 'error');
+  }
+}
+
+// 更新目標顯示
+function updateGoalsDisplay() {
+  if (!weeklyProgressFill || !monthlyProgressFill) return;
+  
+  // 計算進度百分比
+  const weeklyProgress = Math.min(100, (userGoals.weeklyCount / userGoals.weeklyGoal) * 100);
+  const monthlyProgress = Math.min(100, (userGoals.monthlyCount / userGoals.monthlyGoal) * 100);
+  
+  // 更新進度條
+  weeklyProgressFill.style.width = `${weeklyProgress}%`;
+  monthlyProgressFill.style.width = `${monthlyProgress}%`;
+  
+  // 更新數字
+  if (weeklyCurrent) weeklyCurrent.textContent = userGoals.weeklyCount;
+  if (weeklyTarget) weeklyTarget.textContent = userGoals.weeklyGoal;
+  if (monthlyCurrent) monthlyCurrent.textContent = userGoals.monthlyCount;
+  if (monthlyTarget) monthlyTarget.textContent = userGoals.monthlyGoal;
+  
+  // 顯示/隱藏徽章
+  if (weeklyBadge) {
+    weeklyBadge.hidden = userGoals.weeklyCount < userGoals.weeklyGoal;
+  }
+  if (monthlyBadge) {
+    monthlyBadge.hidden = userGoals.monthlyCount < userGoals.monthlyGoal;
+  }
+  
+  // 更新 state 以便社群頁面使用
+  state.goals = userGoals;
+}
+
+// 刷新目標數據
+async function refreshGoals() {
+  if (!state.token) return;
+  
+  try {
+    // 獲取目標設定
+    const goalsData = await api.getGoals();
+    userGoals.weeklyGoal = goalsData.weeklyGoal;
+    userGoals.monthlyGoal = goalsData.monthlyGoal;
+    
+    // 獲取進度
+    const progressData = await api.getGoalsProgress();
+    userGoals.weeklyCount = progressData.weeklyCount;
+    userGoals.monthlyCount = progressData.monthlyCount;
+    
+    // 更新顯示
+    updateGoalsDisplay();
+  } catch (err) {
+    console.error('Error refreshing goals:', err);
+  }
+}
+
+// 事件監聽器
+if (setGoalsBtn) {
+  setGoalsBtn.addEventListener('click', showSetGoalsModal);
+}
+
+if (setGoalsClose) {
+  setGoalsClose.addEventListener('click', hideSetGoalsModal);
+}
+
+if (setGoalsCancel) {
+  setGoalsCancel.addEventListener('click', hideSetGoalsModal);
+}
+
+if (setGoalsForm) {
+  setGoalsForm.addEventListener('submit', handleSetGoals);
+}
+
 
