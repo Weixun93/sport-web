@@ -2719,4 +2719,14 @@ if (setGoalsForm) {
   setGoalsForm.addEventListener('submit', handleSetGoals);
 }
 
+// ==================== AI 聊天功能初始化 ====================
+import { initAIChat } from './chat.js';
+
+// 初始化 AI 聊天
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAIChat);
+} else {
+  initAIChat();
+}
+
 

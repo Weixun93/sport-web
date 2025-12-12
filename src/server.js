@@ -5,6 +5,7 @@ const express = require('express');
 const morgan = require('morgan');
 const multer = require('multer');
 const axios = require('axios');
+const { GoogleGenAI } = require('@google/genai');
 
 require('dotenv').config();
 
@@ -186,7 +187,8 @@ const upload = multer({
 
 // --- 中介軟體 ---
 app.use(morgan('dev'));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // 增加請求大小限制以支援圖片上傳
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/api/health', (_req, res) => {
@@ -1181,6 +1183,52 @@ app.get('/api/goals/progress', requireAuth, async (req, res, next) => {
       }
     });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ==================== AI 聊天功能 ====================
+// POST /api/chat
+// 接收聊天訊息並返回 AI 回應（支援圖片）
+app.post('/api/chat', requireAuth, async (req, res, next) => {
+  try {
+    const { contents } = req.body; // contents 是對話歷史陣列
+    
+    if (!contents || !Array.isArray(contents)) {
+      return res.status(400).json({ error: '需要提供 contents 陣列' });
+    }
+
+    // 初始化 Google AI
+    const ai = new GoogleGenAI({ 
+      apiKey: process.env.GOOGLE_AI_API_KEY 
+    });
+
+    // 呼叫 AI API
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      contents: contents,
+      // systemInstruction: process.env.AI_SYSTEM_INSTRUCTION || '你是一位專業的運動教練和健身顧問，可以用繁體中文回答使用者關於運動、健身、營養和訓練計劃的問題。請提供實用且鼓勵性的建議。請保持回答簡潔，控制在 200 字以內。',
+      // generationConfig: {
+      //   "responseMimeType": "text/plain",
+      //   "maxOutputTokens": 20, // 限制回復長度（約 200-300 中文字）
+      //   temperature: 0.7, // 控制創造性（0-1，越高越有創意）
+      // }
+      config: {
+      systemInstruction: [
+        process.env.AI_SYSTEM_INSTRUCTION || '你是一位專業的運動教練和健身顧問，可以用繁體中文回答使用者關於運動、健身、營養和訓練計劃的問題。請提供實用且鼓勵性的建議。',
+      ],
+      responseMimeType: "text/plain",
+      // maxOutputTokens: 200,
+    }
+    });
+
+    res.json({
+      data: {
+        text: response.text
+      }
+    });
+  } catch (err) {
+    console.error('AI 聊天錯誤:', err);
     next(err);
   }
 });

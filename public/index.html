@@ -321,6 +321,47 @@
         <span class="fab-icon">+</span>
       </button>
 
+      <!-- AI 聊天按鈕 -->
+      <button type="button" id="chat-toggle" class="chat-button" aria-label="AI 助手">
+        <span class="chat-icon">💬</span>
+      </button>
+
+      <!-- AI 聊天窗口 -->
+      <div id="chat-window" class="chat-window" hidden>
+        <div class="chat-header">
+          <h3>🏋️ AI 運動助手</h3>
+          <button type="button" id="chat-close" class="chat-close" aria-label="關閉">✕</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="ai-message">
+            <div class="ai-message-content">
+              你好！我是你的運動助手，可以回答關於運動、健身、營養和訓練計劃的問題。有什麼我可以幫助你的嗎？
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-container">
+          <div class="chat-image-preview" id="chat-image-preview" hidden>
+            <img id="chat-preview-img" src="" alt="預覽圖片" />
+            <button type="button" id="chat-remove-image" class="chat-remove-image" aria-label="移除圖片">✕</button>
+          </div>
+          <div class="chat-input-row">
+            <button type="button" id="chat-image-btn" class="chat-image-btn" aria-label="上傳圖片">
+              <span>📷</span>
+            </button>
+            <textarea 
+              id="chat-input" 
+              class="chat-input" 
+              placeholder="輸入你的問題..." 
+              rows="2"
+            ></textarea>
+            <button type="button" id="chat-send" class="chat-send" aria-label="發送">
+              <span>發送</span>
+            </button>
+          </div>
+          <input type="file" id="chat-image-input" accept="image/*" hidden />
+        </div>
+      </div>
+
       <!-- 浮動卡片 - 新增紀錄表單 -->
       <div id="floating-form-modal" class="floating-form-modal" hidden>
         <div class="floating-form-content">
