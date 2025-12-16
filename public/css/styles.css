@@ -3140,3 +3140,78 @@ body:not(.is-authenticated) .chat-button {
   color: var(--text-light);
   margin-top: 0.5rem;
 }
+
+/* 排行榜 */
+.leaderboard-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-cream);
+  padding-bottom: 1rem;
+}
+
+.leaderboard-tab {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.leaderboard-tab:hover {
+  color: var(--color-teal-dark);
+}
+
+.leaderboard-tab.active {
+  color: var(--color-teal-dark);
+  border-bottom-color: var(--color-teal-dark);
+}
+
+.leaderboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leaderboard-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-cream);
+  transition: background 0.2s ease;
+}
+
+.leaderboard-item:hover {
+  background: rgba(84, 138, 127, 0.05);
+}
+
+.leaderboard-item:last-child {
+  border-bottom: none;
+}
+
+.leaderboard-rank {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-teal-dark);
+  min-width: 50px;
+}
+
+.leaderboard-name {
+  flex: 1;
+  margin: 0 1rem;
+  color: var(--text-dark);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.leaderboard-duration {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  min-width: 80px;
+  text-align: right;
+}

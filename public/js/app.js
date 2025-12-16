@@ -88,6 +88,12 @@ const deleteAccountMessage = document.querySelector('#delete-account-message');
 const loginHistoryList = document.querySelector('#login-history-list');
 const logoutAllBtn = document.querySelector('#logout-all-btn');
 
+// 排行榜相關元素
+const leaderboardTabs = document.querySelectorAll('.leaderboard-tab');
+const leaderboardList = document.querySelector('#leaderboard-list');
+const leaderboardEmpty = document.querySelector('#leaderboard-empty');
+let currentLeaderboardType = 'monthly'; // 'monthly' 或 'all-time'
+
 // 好友相關元素
 const addFriendBtn = document.querySelector('#add-friend-btn');
 const addFriendModal = document.querySelector('#add-friend-modal');
@@ -1138,6 +1144,27 @@ const api = {
       throw new Error(payload.error || 'Failed to get goals progress');
     }
     return payload.data;
+  },
+
+  // ========== 排行榜 API ==========
+  async getLeaderboardMonthly() {
+    const response = await authorizedFetch('/api/leaderboard/monthly');
+    const payload = await response.json().catch(() => ({}));
+    console.log('Monthly leaderboard response:', payload, 'status:', response.status, response.ok);
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to load leaderboard');
+    }
+    return payload.data ?? [];
+  },
+
+  async getLeaderboardAllTime() {
+    const response = await authorizedFetch('/api/leaderboard/all-time');
+    const payload = await response.json().catch(() => ({}));
+    console.log('All-time leaderboard response:', payload, 'status:', response.status, response.ok);
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to load leaderboard');
+    }
+    return payload.data ?? [];
   }
 };
 
@@ -2109,11 +2136,12 @@ function switchPage(pageName) {
   const checkinPage = document.getElementById('checkin-page');
   const communityPage = document.getElementById('community-page');
   const invitationsPage = document.getElementById('invitations-page');
+  const leaderboardPage = document.getElementById('leaderboard-page');
   const recordsPage = document.getElementById('records-page');
   const pageTabs = document.querySelectorAll('.page-tab');
   
   // 移除所有頁面的 active 類
-  [weatherPage, checkinPage, communityPage, invitationsPage, recordsPage].forEach(page => {
+  [weatherPage, checkinPage, communityPage, invitationsPage, leaderboardPage, recordsPage].forEach(page => {
     page?.classList.remove('active');
   });
 
@@ -2132,6 +2160,11 @@ function switchPage(pageName) {
       break;
     case 'invitations':
       invitationsPage?.classList.add('active');
+      break;
+    case 'leaderboard':
+      leaderboardPage?.classList.add('active');
+      // 切換到排行榜頁面時刷新數據
+      refreshLeaderboard();
       break;
     case 'records':
       recordsPage?.classList.add('active');
@@ -2233,6 +2266,23 @@ pageTabs.forEach(tab => {
     switchPage(page);
   });
 });
+
+// 排行榜標籤切換
+if (leaderboardTabs && leaderboardTabs.length > 0) {
+  leaderboardTabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+      const type = this.getAttribute('data-type');
+      
+      // 移除所有標籤的 active 類
+      leaderboardTabs.forEach(t => t.classList.remove('active'));
+      // 添加 active 類到被點擊的標籤
+      this.classList.add('active');
+      
+      currentLeaderboardType = type;
+      refreshLeaderboard();
+    });
+  });
+}
 
 // ========== 用戶名檢查功能 ==========
 // 用戶名檢查的延遲計時器
@@ -2889,6 +2939,60 @@ async function refreshGoals() {
     updateGoalsDisplay();
   } catch (err) {
     console.error('Error refreshing goals:', err);
+  }
+}
+
+function renderLeaderboard(leaderboard) {
+  if (!leaderboardList) return;
+  leaderboardList.innerHTML = '';
+  
+  if (!leaderboard.length) {
+    leaderboardEmpty.style.display = 'block';
+    leaderboardList.style.display = 'none';
+    leaderboardEmpty.innerHTML = '<p>暫無排行數據</p>';
+    return;
+  }
+
+  leaderboardEmpty.style.display = 'none';
+  leaderboardList.style.display = 'block';
+  
+  for (const entry of leaderboard) {
+    const li = document.createElement('li');
+    const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : '';
+    li.innerHTML = `
+      <div class="leaderboard-item">
+        <span class="leaderboard-rank">${medal} #${entry.rank}</span>
+        <span class="leaderboard-name">${entry.displayName || entry.username}</span>
+        <span class="leaderboard-duration">${entry.totalDuration} 分鐘</span>
+      </div>
+    `;
+    leaderboardList.appendChild(li);
+  }
+}
+
+async function refreshLeaderboard() {
+  if (!state.token) return;
+  
+  try {
+    leaderboardEmpty.style.display = 'block';
+    leaderboardList.style.display = 'none';
+    leaderboardEmpty.innerHTML = '<p>載入中...</p>';
+    
+    let leaderboard = [];
+    if (currentLeaderboardType === 'monthly') {
+      console.log('Fetching monthly leaderboard...');
+      leaderboard = await api.getLeaderboardMonthly();
+    } else {
+      console.log('Fetching all-time leaderboard...');
+      leaderboard = await api.getLeaderboardAllTime();
+    }
+    
+    console.log('Leaderboard data received:', leaderboard);
+    renderLeaderboard(leaderboard);
+  } catch (err) {
+    console.error('Error refreshing leaderboard:', err);
+    leaderboardEmpty.innerHTML = '<p>無法載入排行榜</p>';
+    leaderboardEmpty.style.display = 'block';
   }
 }
 

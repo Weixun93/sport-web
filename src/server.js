@@ -1695,6 +1695,74 @@ app.get('/api/blacklist', requireAuth, async (req, res, next) => {
   }
 });
 
+// ========== 排行榜 API ==========
+// 獲取月排行榜
+app.get('/api/leaderboard/monthly', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.display_name,
+        COALESCE(SUM(a.duration_minutes), 0)::INTEGER as total_duration
+      FROM users u
+      LEFT JOIN activities a ON u.id = a.owner_id 
+        AND DATE_TRUNC('month', a.date::TIMESTAMP) = DATE_TRUNC('month', CURRENT_DATE)
+      GROUP BY u.id, u.username, u.display_name
+      ORDER BY total_duration DESC, u.username ASC
+      LIMIT 100
+    `);
+
+    console.log('月排行榜數據:', result.rows);
+
+    const leaderboard = result.rows.map((row, index) => ({
+      rank: index + 1,
+      userId: row.id,
+      username: row.username,
+      displayName: row.display_name || row.username,
+      totalDuration: row.total_duration || 0
+    }));
+
+    res.json({ data: leaderboard });
+  } catch (err) {
+    console.error('獲取月排行榜錯誤:', err);
+    next(err);
+  }
+});
+
+// 獲取總排行榜
+app.get('/api/leaderboard/all-time', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.display_name,
+        COALESCE(SUM(a.duration_minutes), 0)::INTEGER as total_duration
+      FROM users u
+      LEFT JOIN activities a ON u.id = a.owner_id
+      GROUP BY u.id, u.username, u.display_name
+      ORDER BY total_duration DESC, u.username ASC
+      LIMIT 100
+    `);
+
+    console.log('總排行榜數據:', result.rows);
+
+    const leaderboard = result.rows.map((row, index) => ({
+      rank: index + 1,
+      userId: row.id,
+      username: row.username,
+      displayName: row.display_name || row.username,
+      totalDuration: row.total_duration || 0
+    }));
+
+    res.json({ data: leaderboard });
+  } catch (err) {
+    console.error('獲取總排行榜錯誤:', err);
+    next(err);
+  }
+});
+
 // --- 錯誤處理中介軟體 ---
 app.use((req, res) => {
   res.status(404).json({ error: `Route not found: ${req.originalUrl}` });

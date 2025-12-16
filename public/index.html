@@ -121,6 +121,7 @@
           <button type="button" class="page-tab" data-page="checkin">打卡</button>
           <button type="button" class="page-tab" data-page="community">動態</button>
           <button type="button" class="page-tab" data-page="invitations">邀請</button>
+          <button type="button" class="page-tab" data-page="leaderboard">排行榜</button>
           <button type="button" class="page-tab" data-page="records">個人</button>
         </div>
       </div>
@@ -213,6 +214,24 @@
         </section>
       </div>
       <!-- 結束邀請頁面 -->
+
+      <div id="leaderboard-page" class="page-content">
+        <!-- 排行榜頁面 -->
+        <section class="card full-width">
+          <h2>🏆 排行榜</h2>
+          <div class="leaderboard-tabs">
+            <button type="button" class="leaderboard-tab active" data-type="monthly">月排行</button>
+            <button type="button" class="leaderboard-tab" data-type="all-time">總排行</button>
+          </div>
+          <div id="leaderboard-container">
+            <div id="leaderboard-empty" class="empty-state">
+              <p>載入中...</p>
+            </div>
+            <ol id="leaderboard-list" class="leaderboard-list"></ol>
+          </div>
+        </section>
+      </div>
+      <!-- 結束排行榜頁面 -->
 
       <div id="records-page" class="page-content">
         <!-- 個人頁面內容 -->
