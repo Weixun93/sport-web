@@ -1251,6 +1251,39 @@ function renderPublicActivities(activities) {
   publicList.addEventListener('click', handleActivityInteraction);
 }
 
+// 活動篩選相關
+let currentActivityFilter = 'all'; // 'all', 'friends', 'others'
+
+function filterPublicActivities(filterType) {
+  currentActivityFilter = filterType;
+  
+  const filteredActivities = state.publicFeed.filter(activity => {
+    if (filterType === 'all') {
+      return true;
+    } else if (filterType === 'friends') {
+      return activity.isFriend;
+    }
+    return true;
+  });
+  
+  renderPublicActivities(filteredActivities);
+}
+
+function initActivityFilters() {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 移除所有按鈕的 active 類
+      filterButtons.forEach(b => b.classList.remove('active'));
+      // 添加 active 類到被點擊的按鈕
+      btn.classList.add('active');
+      
+      const filterType = btn.getAttribute('data-filter');
+      filterPublicActivities(filterType);
+    });
+  });
+}
+
 async function refreshActivities() {
   if (!state.token) return;
   try {
@@ -2094,6 +2127,8 @@ function switchPage(pageName) {
       break;
     case 'community':
       communityPage?.classList.add('active');
+      // 初始化篩選功能
+      setTimeout(() => initActivityFilters(), 0);
       break;
     case 'invitations':
       invitationsPage?.classList.add('active');

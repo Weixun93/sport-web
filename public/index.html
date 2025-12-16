@@ -188,7 +188,13 @@
       <div id="community-page" class="page-content">
         <!-- 社群頁面 - 社群動態 -->
         <section class="card full-width" id="public-activity-card">
-          <h2>社群動態</h2>
+          <div class="activity-filter-header">
+            <h2>社群動態</h2>
+            <div class="activity-filter-buttons">
+              <button type="button" class="filter-btn active" data-filter="all">全部</button>
+              <button type="button" class="filter-btn" data-filter="friends">👥 好友</button>
+            </div>
+          </div>
           <ul id="public-activity-list" class="activity-list"></ul>
         </section>
       </div>
